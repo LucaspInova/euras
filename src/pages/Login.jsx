@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { supabase } from "../lib/supabase";
 import { useAuth } from "../context/AuthContext";
 
 function EyeIcon({ visible }) {
@@ -47,7 +46,7 @@ function EyeIcon({ visible }) {
 
 export default function Login() {
   const navigate = useNavigate();
-  const { user, loading } = useAuth();
+  const { user, loading, signInWithPassword } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -75,7 +74,7 @@ export default function Login() {
 
     setIsLoading(true);
 
-    const { error } = await supabase.auth.signInWithPassword({
+    const { error } = await signInWithPassword({
       email,
       password,
     });

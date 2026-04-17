@@ -2,6 +2,12 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import { AuthProvider } from "./context/AuthContext";
 import Dashboard from "./pages/Dashboard";
 import Login from "./pages/Login";
+import PartnerCreate from "./pages/PartnerCreate";
+import PartnerDetail from "./pages/PartnerDetail";
+import PartnerProductCreate from "./pages/PartnerProductCreate";
+import PartnerProductDetail from "./pages/PartnerProductDetail";
+import PartnerProducts from "./pages/PartnerProducts";
+import Partners from "./pages/Partners";
 import SectionBlank from "./pages/SectionBlank";
 import StudentCreate from "./pages/StudentCreate";
 import StudentDetail from "./pages/StudentDetail";
@@ -59,7 +65,47 @@ function App() {
           path="/parceiros"
           element={
             <ProtectedRoute>
-              <SectionBlank title="Parceiros" />
+              <Partners />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/parceiros/novo"
+          element={
+            <ProtectedRoute>
+              <PartnerCreate />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/parceiros/:partnerId"
+          element={
+            <ProtectedRoute>
+              <PartnerDetail />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/parceiros/:partnerId/produtos"
+          element={
+            <ProtectedRoute>
+              <PartnerProducts />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/parceiros/:partnerId/produtos/novo"
+          element={
+            <ProtectedRoute>
+              <PartnerProductCreate />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/parceiros/:partnerId/produtos/:productId"
+          element={
+            <ProtectedRoute>
+              <PartnerProductDetail />
             </ProtectedRoute>
           }
         />

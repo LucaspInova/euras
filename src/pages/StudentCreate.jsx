@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import SidebarLayout from '../components/SidebarLayout'
 import { formatDateInput, formatPhoneInput } from '../lib/studentFormatters'
-import { addStoredStudent } from '../lib/studentsStorage'
+import { createStudent, getStudentApiErrorMessage } from '../lib/studentsApi'
 
 const campusOptions = ['MARACANAU', 'REDENCAO', 'PENTECOSTES']
 const courseOptions = ['ENGENHARIA CIVIL', 'ENFERMAGEM', 'DIREITO', 'MEDICINA', 'ARQUITETURA', 'PSICOLOGIA']
@@ -25,6 +25,7 @@ function BackIcon() {
 export default function StudentCreate() {
   const navigate = useNavigate()
   const [formError, setFormError] = useState('')
+  const [isSaving, setIsSaving] = useState(false)
   const [form, setForm] = useState({
     name: '',
     phone: '',
@@ -48,7 +49,7 @@ export default function StudentCreate() {
     setForm((current) => ({ ...current, [field]: nextValue }))
   }
 
-  const handleSubmit = (event) => {
+  const handleSubmit = async (event) => {
     event.preventDefault()
     setFormError('')
 
@@ -57,18 +58,25 @@ export default function StudentCreate() {
       return
     }
 
-    addStoredStudent({
-      id: `student-${Date.now()}`,
-      name: form.name.trim().toUpperCase(),
-      course: form.course.trim().toUpperCase(),
-      campus: form.campus.trim().toUpperCase(),
-      phone: form.phone,
-      entryDate: form.entryDate,
-      email: form.email.trim(),
-      balance: '300,00',
-    })
+    setIsSaving(true)
 
-    navigate('/alunos')
+    try {
+      await createStudent({
+        name: form.name,
+        course: form.course,
+        campus: form.campus,
+        phone: form.phone,
+        entryDate: form.entryDate,
+        email: form.email,
+      })
+
+      navigate('/alunos')
+    } catch (error) {
+      console.info('Nao foi possivel cadastrar o aluno no Supabase.', error)
+      setFormError(getStudentApiErrorMessage(error))
+    } finally {
+      setIsSaving(false)
+    }
   }
 
   return (
@@ -164,7 +172,7 @@ export default function StudentCreate() {
 
           <div className="student-create-submit-row">
             <button type="submit" className="student-submit-button">
-              Adicionar aluno
+              {isSaving ? 'Salvando...' : 'Adicionar aluno'}
             </button>
           </div>
         </form>

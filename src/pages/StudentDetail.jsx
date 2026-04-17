@@ -1,8 +1,8 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Navigate, useNavigate, useParams } from 'react-router-dom'
 import SidebarLayout from '../components/SidebarLayout'
 import { formatDateInput, formatPhoneInput } from '../lib/studentFormatters'
-import { getStoredStudentById, removeStoredStudent, updateStoredStudent } from '../lib/studentsStorage'
+import { getStudentApiErrorMessage, getStudentById, removeStudent, updateStudent } from '../lib/studentsApi'
 
 function BackIcon() {
   return (
@@ -46,15 +46,55 @@ export default function StudentDetail() {
   const navigate = useNavigate()
   const { studentId } = useParams()
   const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [student, setStudent] = useState(null)
+  const [form, setForm] = useState(null)
+  const [loadingStudent, setLoadingStudent] = useState(true)
+  const [loadError, setLoadError] = useState('')
+  const [saveError, setSaveError] = useState('')
+  const [isRemoving, setIsRemoving] = useState(false)
 
-  const student = useMemo(() => getStoredStudentById(studentId), [studentId])
-  const [form, setForm] = useState(() => getStoredStudentById(studentId))
+  useEffect(() => {
+    let active = true
 
-  if (!student || !form) {
+    async function loadStudent() {
+      setLoadingStudent(true)
+      setLoadError('')
+
+      try {
+        const nextStudent = await getStudentById(studentId)
+
+        if (!active) {
+          return
+        }
+
+        setStudent(nextStudent)
+        setForm(nextStudent)
+      } catch (error) {
+        if (!active) {
+          return
+        }
+
+        console.info('Nao foi possivel carregar o aluno no Supabase.', error)
+        setLoadError(getStudentApiErrorMessage(error))
+      } finally {
+        if (active) {
+          setLoadingStudent(false)
+        }
+      }
+    }
+
+    loadStudent()
+
+    return () => {
+      active = false
+    }
+  }, [studentId])
+
+  if (!loadingStudent && !loadError && (!student || !form)) {
     return <Navigate to="/alunos" replace />
   }
 
-  const handleChange = (field) => (event) => {
+  const handleChange = (field) => async (event) => {
     let nextValue = event.target.value
 
     if (field === 'phone') {
@@ -67,12 +107,29 @@ export default function StudentDetail() {
 
     const nextForm = { ...form, [field]: nextValue }
     setForm(nextForm)
-    updateStoredStudent(student.id, nextForm)
+    setSaveError('')
+
+    try {
+      const updatedStudent = await updateStudent(student.id, nextForm)
+      setStudent(updatedStudent)
+      setForm(updatedStudent)
+    } catch (error) {
+      console.info('Nao foi possivel atualizar o aluno no Supabase.', error)
+      setSaveError(getStudentApiErrorMessage(error))
+    }
   }
 
-  const handleRemoveStudent = () => {
-    removeStoredStudent(student.id)
-    navigate('/alunos', { replace: true })
+  const handleRemoveStudent = async () => {
+    setIsRemoving(true)
+
+    try {
+      await removeStudent(student.id)
+      navigate('/alunos', { replace: true })
+    } catch (error) {
+      console.info('Nao foi possivel remover o aluno no Supabase.', error)
+      setSaveError(getStudentApiErrorMessage(error))
+      setIsRemoving(false)
+    }
   }
 
   return (
@@ -91,6 +148,12 @@ export default function StudentDetail() {
           </button>
         </div>
 
+        {loadingStudent ? <p className="form-message">Carregando aluno...</p> : null}
+        {loadError ? <p className="form-message form-message-error">{loadError}</p> : null}
+        {saveError ? <p className="form-message form-message-error">{saveError}</p> : null}
+
+        {!loadingStudent && !loadError && form ? (
+          <>
         <section className="student-create-card student-detail-card">
           <div className="student-create-grid">
             <div className="student-create-column">
@@ -167,6 +230,7 @@ export default function StudentDetail() {
           <button
             type="button"
             className="student-remove-button"
+            disabled={isRemoving}
             onClick={() => setShowDeleteModal(true)}
           >
             <span>Remover aluno</span>
@@ -191,10 +255,12 @@ export default function StudentDetail() {
               <p>Tem certeza de que deseja remover este aluno?</p>
 
               <button type="button" className="student-modal-confirm" onClick={handleRemoveStudent}>
-                Remover
+                {isRemoving ? 'Removendo...' : 'Remover'}
               </button>
             </div>
           </div>
+        ) : null}
+          </>
         ) : null}
       </section>
     </SidebarLayout>

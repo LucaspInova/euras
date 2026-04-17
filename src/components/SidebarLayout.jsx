@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { supabase } from '../lib/supabase'
 
 const menuItems = [
   { to: '/dashboard', label: 'Tela inicial', icon: 'home', end: true },
@@ -67,19 +66,34 @@ function MenuIcon({ type }) {
 
 export default function SidebarLayout({ title, children }) {
   const navigate = useNavigate()
-  const { user } = useAuth()
+  const { user, signOut } = useAuth()
   const [signingOut, setSigningOut] = useState(false)
+  const [signOutError, setSignOutError] = useState('')
 
   const handleSignOut = async () => {
     setSigningOut(true)
+    setSignOutError('')
 
     try {
-      await supabase.auth.signOut()
+      const { error } = await signOut()
+
+      if (error) {
+        console.error('Falha ao encerrar sessao no Supabase.', {
+          message: error.message,
+          status: error.status,
+          code: error.code,
+          name: error.name,
+        })
+        setSignOutError('Nao foi possivel encerrar a sessao agora. Tente novamente.')
+        return
+      }
+
+      navigate('/login', { replace: true })
     } catch (error) {
-      console.info('Falha ao encerrar sessao no Supabase, redirecionando mesmo assim.', error)
+      console.error('Erro inesperado ao encerrar sessao.', error)
+      setSignOutError('Nao foi possivel encerrar a sessao agora. Tente novamente.')
     } finally {
       setSigningOut(false)
-      navigate('/login', { replace: true })
     }
   }
 
@@ -120,6 +134,7 @@ export default function SidebarLayout({ title, children }) {
             <button type="button" className="signout-button" onClick={handleSignOut}>
               {signingOut ? 'Encerrando...' : 'Encerrar sessao'}
             </button>
+            {signOutError ? <p className="form-message form-message-error">{signOutError}</p> : null}
           </div>
         </aside>
 

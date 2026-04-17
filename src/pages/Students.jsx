@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import SidebarLayout from '../components/SidebarLayout'
-import { getStoredStudents } from '../lib/studentsStorage'
+import { getStudentApiErrorMessage, listStudents } from '../lib/studentsApi'
 
 function SuccessIcon() {
   return (
@@ -62,12 +62,50 @@ export default function Students() {
   const navigate = useNavigate()
   const location = useLocation()
   const filterRef = useRef(null)
-  const [students] = useState(() => getStoredStudents())
+  const [students, setStudents] = useState([])
+  const [loadingStudents, setLoadingStudents] = useState(true)
+  const [loadError, setLoadError] = useState('')
   const [searchTerm, setSearchTerm] = useState('')
   const [showFilters, setShowFilters] = useState(false)
   const [selectedCampus, setSelectedCampus] = useState('TODAS')
   const [selectedCourse, setSelectedCourse] = useState('TODOS')
   const [transferSuccess, setTransferSuccess] = useState(() => location.state?.transferSuccess ?? null)
+
+  useEffect(() => {
+    let active = true
+
+    async function loadStudents() {
+      setLoadingStudents(true)
+      setLoadError('')
+
+      try {
+        const nextStudents = await listStudents()
+
+        if (!active) {
+          return
+        }
+
+        setStudents(nextStudents)
+      } catch (error) {
+        if (!active) {
+          return
+        }
+
+        console.info('Nao foi possivel carregar os alunos do Supabase.', error)
+        setLoadError(getStudentApiErrorMessage(error))
+      } finally {
+        if (active) {
+          setLoadingStudents(false)
+        }
+      }
+    }
+
+    loadStudents()
+
+    return () => {
+      active = false
+    }
+  }, [])
 
   useEffect(() => {
     if (!showFilters) {
@@ -194,7 +232,12 @@ export default function Students() {
           </div>
 
           <div className="students-table-body">
-            {filteredStudents.map((student) => (
+            {loadingStudents ? <div className="students-empty-state">Carregando alunos...</div> : null}
+
+            {loadError && !loadingStudents ? <div className="students-empty-state">{loadError}</div> : null}
+
+            {!loadingStudents && !loadError
+              ? filteredStudents.map((student) => (
               <button
                 type="button"
                 className="students-row"
@@ -205,9 +248,10 @@ export default function Students() {
                 <span className="students-course">{student.course}</span>
                 <span className="students-campus">{student.campus}</span>
               </button>
-            ))}
+                ))
+              : null}
 
-            {filteredStudents.length === 0 ? (
+            {!loadingStudents && !loadError && filteredStudents.length === 0 ? (
               <div className="students-empty-state">Nenhum aluno encontrado com os filtros atuais.</div>
             ) : null}
           </div>

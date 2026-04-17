@@ -3,18 +3,19 @@ import { createContext, useContext, useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 
 const AuthContext = createContext(null)
+const euras = supabase.schema('euras')
 
 async function updateLastLoginIfAllowed(userId) {
   if (!userId) return
 
-  const { error } = await supabase
-    .from('profiles')
-    .update({ last_login_at: new Date().toISOString() })
+  const { error } = await euras
+    .from('perfis')
+    .update({ ultimo_login_em: new Date().toISOString() })
     .eq('id', userId)
 
   if (error) {
     console.info(
-      'Nao foi possivel atualizar last_login_at por RLS/permissao. Fluxo segue normalmente.',
+      'Nao foi possivel atualizar euras.perfis.ultimo_login_em por RLS/permissao. Fluxo segue normalmente.',
       error.message,
     )
   }
