@@ -1,5 +1,6 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import { AuthProvider } from "./context/AuthContext";
+import Activities from "./pages/Activities";
 import Dashboard from "./pages/Dashboard";
 import Login from "./pages/Login";
 import PartnerCreate from "./pages/PartnerCreate";
@@ -8,7 +9,10 @@ import PartnerProductCreate from "./pages/PartnerProductCreate";
 import PartnerProductDetail from "./pages/PartnerProductDetail";
 import PartnerProducts from "./pages/PartnerProducts";
 import Partners from "./pages/Partners";
-import SectionBlank from "./pages/SectionBlank";
+import Profile from "./pages/Profile";
+import ProductCreate from "./pages/ProductCreate";
+import ProductDetail from "./pages/ProductDetail";
+import Products from "./pages/Products";
 import StudentCreate from "./pages/StudentCreate";
 import StudentDetail from "./pages/StudentDetail";
 import StudentTransfer from "./pages/StudentTransfer";
@@ -113,7 +117,23 @@ function App() {
           path="/produtos"
           element={
             <ProtectedRoute>
-              <SectionBlank title="Produtos" />
+              <Products />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/produtos/novo"
+          element={
+            <ProtectedRoute>
+              <ProductCreate />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/produtos/:productId"
+          element={
+            <ProtectedRoute>
+              <ProductDetail />
             </ProtectedRoute>
           }
         />
@@ -121,7 +141,7 @@ function App() {
           path="/atividades"
           element={
             <ProtectedRoute>
-              <SectionBlank title="Atividades" />
+              <Activities />
             </ProtectedRoute>
           }
         />
@@ -129,7 +149,7 @@ function App() {
           path="/perfil"
           element={
             <ProtectedRoute>
-              <SectionBlank title="Meu perfil" />
+              <Profile />
             </ProtectedRoute>
           }
         />

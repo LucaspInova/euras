@@ -72,7 +72,7 @@ export default function StudentCreate() {
 
       navigate('/alunos')
     } catch (error) {
-      console.info('Nao foi possivel cadastrar o aluno no Supabase.', error)
+      console.info('Nao foi possivel cadastrar o aluno na base mockada.', error)
       setFormError(getStudentApiErrorMessage(error))
     } finally {
       setIsSaving(false)

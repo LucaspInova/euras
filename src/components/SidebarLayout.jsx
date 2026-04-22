@@ -64,7 +64,7 @@ function MenuIcon({ type }) {
   )
 }
 
-export default function SidebarLayout({ title, children }) {
+export default function SidebarLayout({ title, children, showSidebarSignOut = true }) {
   const navigate = useNavigate()
   const { user, signOut } = useAuth()
   const [signingOut, setSigningOut] = useState(false)
@@ -102,9 +102,7 @@ export default function SidebarLayout({ title, children }) {
       <section className="home-shell">
         <aside className="side-menu">
           <div className="side-menu-main">
-            <div className="coin-logo" aria-hidden="true">
-              <span>E</span>
-            </div>
+            <div className="coin-logo" aria-hidden="true" />
 
             <div className="profile-block">
               <h2>Eula Paula</h2>
@@ -130,12 +128,14 @@ export default function SidebarLayout({ title, children }) {
             </nav>
           </div>
 
-          <div className="side-menu-footer">
-            <button type="button" className="signout-button" onClick={handleSignOut}>
-              {signingOut ? 'Encerrando...' : 'Encerrar sessao'}
-            </button>
-            {signOutError ? <p className="form-message form-message-error">{signOutError}</p> : null}
-          </div>
+          {showSidebarSignOut ? (
+            <div className="side-menu-footer">
+              <button type="button" className="signout-button" onClick={handleSignOut}>
+                {signingOut ? 'Encerrando...' : 'Encerrar sessao'}
+              </button>
+              {signOutError ? <p className="form-message form-message-error">{signOutError}</p> : null}
+            </div>
+          ) : null}
         </aside>
 
         <section className="content-panel">

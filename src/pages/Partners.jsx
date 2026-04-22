@@ -59,7 +59,7 @@ export default function Partners() {
         setPartners(nextPartners)
       } catch (error) {
         if (!active) return
-        console.info('Falha ao carregar parceiros no Supabase.', error)
+        console.info('Falha ao carregar parceiros mockados.', error)
         setLoadError(getPartnerApiErrorMessage(error))
       } finally {
         if (active) {

@@ -91,7 +91,7 @@ export default function Students() {
           return
         }
 
-        console.info('Nao foi possivel carregar os alunos do Supabase.', error)
+        console.info('Nao foi possivel carregar os alunos mockados.', error)
         setLoadError(getStudentApiErrorMessage(error))
       } finally {
         if (active) {

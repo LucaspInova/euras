@@ -97,9 +97,32 @@ export function AuthProvider({ children }) {
     return { data, error }
   }
 
+  const createTimeoutError = () => {
+    const error = new Error('Tempo limite para encerrar a sessao excedido.')
+    error.name = 'AuthSignOutTimeoutError'
+    return error
+  }
+
   const signOut = async () => {
-    const { error } = await supabase.auth.signOut()
-    return { error }
+    const timeoutMs = 8000
+
+    setSession(null)
+    setUser(null)
+    setLoading(false)
+    setAuthError('')
+
+    try {
+      const result = await Promise.race([
+        supabase.auth.signOut(),
+        new Promise((resolve) => {
+          setTimeout(() => resolve({ error: createTimeoutError() }), timeoutMs)
+        }),
+      ])
+
+      return { error: result?.error ?? null }
+    } catch (error) {
+      return { error }
+    }
   }
 
   const value = {

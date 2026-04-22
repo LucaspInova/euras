@@ -152,6 +152,8 @@ export default function PartnerDetail() {
         campus: form.campus.trim(),
         schedule: form.schedule,
       })
+
+      navigate('/parceiros', { replace: true })
     } catch (error) {
       console.info('Falha ao salvar parceiro.', error)
       setFormError(getPartnerApiErrorMessage(error))

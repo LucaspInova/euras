@@ -74,7 +74,7 @@ export default function StudentDetail() {
           return
         }
 
-        console.info('Nao foi possivel carregar o aluno no Supabase.', error)
+        console.info('Nao foi possivel carregar o aluno na base mockada.', error)
         setLoadError(getStudentApiErrorMessage(error))
       } finally {
         if (active) {
@@ -114,7 +114,7 @@ export default function StudentDetail() {
       setStudent(updatedStudent)
       setForm(updatedStudent)
     } catch (error) {
-      console.info('Nao foi possivel atualizar o aluno no Supabase.', error)
+      console.info('Nao foi possivel atualizar o aluno na base mockada.', error)
       setSaveError(getStudentApiErrorMessage(error))
     }
   }
@@ -126,7 +126,7 @@ export default function StudentDetail() {
       await removeStudent(student.id)
       navigate('/alunos', { replace: true })
     } catch (error) {
-      console.info('Nao foi possivel remover o aluno no Supabase.', error)
+      console.info('Nao foi possivel remover o aluno da base mockada.', error)
       setSaveError(getStudentApiErrorMessage(error))
       setIsRemoving(false)
     }

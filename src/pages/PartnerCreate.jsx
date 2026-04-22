@@ -102,7 +102,7 @@ export default function PartnerCreate() {
 
       navigate(`/parceiros/${partnerId}`)
     } catch (error) {
-      console.info('Falha ao criar parceiro no Supabase.', error)
+      console.info('Falha ao criar parceiro na base mockada.', error)
       setFormError(getPartnerApiErrorMessage(error))
       setIsSaving(false)
     }

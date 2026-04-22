@@ -103,7 +103,7 @@ export default function StudentTransfer() {
         },
       })
     } catch (error) {
-      console.info('Nao foi possivel registrar o deposito no Supabase.', error)
+      console.info('Nao foi possivel registrar o deposito na base mockada.', error)
       setSubmitError(getStudentApiErrorMessage(error))
       setIsSubmitting(false)
     }
