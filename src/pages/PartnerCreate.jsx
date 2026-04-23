@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import SidebarLayout from '../components/SidebarLayout'
 import { createPartner, getPartnerApiErrorMessage } from '../lib/partnersApi'
@@ -45,8 +45,20 @@ function TimeField({ value, onChange }) {
   )
 }
 
+function fileToDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+
+    reader.onload = () => resolve(String(reader.result ?? ''))
+    reader.onerror = () => reject(new Error('Nao foi possivel processar a imagem selecionada.'))
+
+    reader.readAsDataURL(file)
+  })
+}
+
 export default function PartnerCreate() {
   const navigate = useNavigate()
+  const fileInputRef = useRef(null)
   const [formError, setFormError] = useState('')
   const [isSaving, setIsSaving] = useState(false)
   const [form, setForm] = useState({
@@ -55,6 +67,7 @@ export default function PartnerCreate() {
     phone: '(00) 00000-0000',
     email: 'admin123@test.com',
     campus: 'MARACANAU',
+    imageUrl: '',
   })
   const [schedule, setSchedule] = useState({
     week: { open: true, openHour: '06', openMinute: '00', closeHour: '18', closeMinute: '00' },
@@ -97,6 +110,7 @@ export default function PartnerCreate() {
         phone: form.phone.trim(),
         email: form.email.trim(),
         campus: form.campus.trim(),
+        imageUrl: form.imageUrl?.trim() ?? '',
         schedule,
       })
 
@@ -105,6 +119,31 @@ export default function PartnerCreate() {
       console.info('Falha ao criar parceiro na base mockada.', error)
       setFormError(getPartnerApiErrorMessage(error))
       setIsSaving(false)
+    }
+  }
+
+  const handlePhotoClick = () => {
+    fileInputRef.current?.click()
+  }
+
+  const handlePhotoChange = async (event) => {
+    const selectedFile = event.target.files?.[0]
+    event.target.value = ''
+
+    if (!selectedFile) {
+      return
+    }
+
+    if (selectedFile.size > 2 * 1024 * 1024) {
+      setFormError('A imagem deve ter no maximo 2MB.')
+      return
+    }
+
+    try {
+      const imageDataUrl = await fileToDataUrl(selectedFile)
+      setForm((current) => ({ ...current, imageUrl: imageDataUrl }))
+    } catch (error) {
+      setFormError(error.message)
     }
   }
 
@@ -157,8 +196,24 @@ export default function PartnerCreate() {
             <div className="partner-create-column">
               <div className="partner-photo-box">
                 <span>Adicionar foto:</span>
-                <button type="button" className="partner-photo-button" aria-label="Adicionar foto do parceiro">
-                  <AddPhotoIcon />
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  style={{ display: 'none' }}
+                  onChange={handlePhotoChange}
+                />
+                <button
+                  type="button"
+                  className="partner-photo-button"
+                  aria-label="Adicionar foto do parceiro"
+                  onClick={handlePhotoClick}
+                >
+                  {form.imageUrl ? (
+                    <img src={form.imageUrl} alt={`Foto de ${form.institution}`} className="partner-photo-preview" />
+                  ) : (
+                    <AddPhotoIcon />
+                  )}
                 </button>
               </div>
 

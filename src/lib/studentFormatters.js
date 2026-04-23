@@ -48,13 +48,22 @@ export function formatBalanceInput(value) {
 }
 
 export function balanceToCents(value) {
-  const normalized = (value ?? '').replace(/\D/g, '')
-  return normalized ? Number(normalized) : 0
+  const raw = String(value ?? '').trim()
+  if (!raw) {
+    return 0
+  }
+
+  const normalized = raw.replace(/\./g, '').replace(',', '.')
+  const parsed = Number(normalized)
+
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return 0
+  }
+
+  return Math.round(parsed)
 }
 
 export function centsToBalance(valueInCents) {
   const safeValue = Math.max(0, Number(valueInCents) || 0)
-  const integerPart = Math.floor(safeValue / 100)
-  const decimalPart = String(safeValue % 100).padStart(2, '0')
-  return `${integerPart},${decimalPart}`
+  return safeValue.toFixed(2).replace('.', ',')
 }

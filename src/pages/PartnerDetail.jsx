@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Navigate, useNavigate, useParams } from 'react-router-dom'
 import SidebarLayout from '../components/SidebarLayout'
 import { getPartnerApiErrorMessage, getPartnerById, removePartner, updatePartner } from '../lib/partnersApi'
@@ -55,9 +55,21 @@ function TimeField({ value, onChange }) {
   )
 }
 
+function fileToDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+
+    reader.onload = () => resolve(String(reader.result ?? ''))
+    reader.onerror = () => reject(new Error('Nao foi possivel processar a imagem selecionada.'))
+
+    reader.readAsDataURL(file)
+  })
+}
+
 export default function PartnerDetail() {
   const navigate = useNavigate()
   const { partnerId } = useParams()
+  const fileInputRef = useRef(null)
   const [partner, setPartner] = useState(null)
   const [loading, setLoading] = useState(true)
   const [formError, setFormError] = useState('')
@@ -83,6 +95,7 @@ export default function PartnerDetail() {
           phone: data.phone ?? '',
           email: data.email ?? '',
           campus: data.campus ?? '',
+          imageUrl: data.imageUrl ?? '',
           schedule: data.schedule,
         })
       } catch (error) {
@@ -150,6 +163,7 @@ export default function PartnerDetail() {
         phone: form.phone.trim(),
         email: form.email.trim(),
         campus: form.campus.trim(),
+        imageUrl: form.imageUrl?.trim() ?? '',
         schedule: form.schedule,
       })
 
@@ -159,6 +173,35 @@ export default function PartnerDetail() {
       setFormError(getPartnerApiErrorMessage(error))
     } finally {
       setIsSaving(false)
+    }
+  }
+
+  const handlePhotoClick = () => {
+    fileInputRef.current?.click()
+  }
+
+  const handlePhotoChange = async (event) => {
+    const selectedFile = event.target.files?.[0]
+    event.target.value = ''
+
+    if (!selectedFile) {
+      return
+    }
+
+    if (selectedFile.size > 2 * 1024 * 1024) {
+      setFormError('A imagem deve ter no maximo 2MB.')
+      return
+    }
+
+    try {
+      const imageDataUrl = await fileToDataUrl(selectedFile)
+
+      setForm((current) => ({
+        ...current,
+        imageUrl: imageDataUrl,
+      }))
+    } catch (error) {
+      setFormError(error.message)
     }
   }
 
@@ -224,9 +267,20 @@ export default function PartnerDetail() {
                 <div className="partner-create-column">
                   <div className="partner-photo-box">
                     <span>Adicionar foto:</span>
-                    <button type="button" className="partner-photo-button" aria-label="Foto do parceiro">
-                      <PartnerLogo label={partner.logo} variant={partner.variant} />
-                      <p>{partner.campus}</p>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*"
+                      style={{ display: 'none' }}
+                      onChange={handlePhotoChange}
+                    />
+                    <button type="button" className="partner-photo-button" aria-label="Foto do parceiro" onClick={handlePhotoClick}>
+                      {form.imageUrl ? (
+                        <img src={form.imageUrl} alt={`Foto de ${form.institution}`} className="partner-photo-preview" />
+                      ) : (
+                        <PartnerLogo label={partner.logo} variant={partner.variant} />
+                      )}
+                      <p>{form.campus || partner.campus}</p>
                     </button>
                   </div>
 

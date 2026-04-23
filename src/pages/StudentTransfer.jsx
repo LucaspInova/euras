@@ -88,7 +88,7 @@ export default function StudentTransfer() {
     try {
       await addStudentCredit({
         studentId: student.id,
-        amountInCents: transferAmount,
+        amountInEuras: transferAmount,
         createdBy: user?.id,
         note: 'Deposito de Euras realizado pelo painel administrativo.',
       })

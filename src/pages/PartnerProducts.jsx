@@ -132,7 +132,11 @@ export default function PartnerProducts() {
                     className="product-card-logo product-card-link"
                     onClick={() => navigate(`/parceiros/${partnerId}/produtos/${product.id}`)}
                   >
-                    <ProductIcon />
+                    {product.imageUrl ? (
+                      <img src={product.imageUrl} alt={product.name} className="product-card-image" loading="lazy" />
+                    ) : (
+                      <ProductIcon />
+                    )}
                   </button>
                   <strong>{product.name}</strong>
                   <p>{partner.name}</p>

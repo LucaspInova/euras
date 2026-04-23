@@ -1,9 +1,20 @@
 /* eslint-disable react-refresh/only-export-components */
 import { createContext, useContext, useEffect, useState } from 'react'
-import { supabase } from '../lib/supabase'
+import { ensureFreshSession, supabase } from '../lib/supabase'
 
 const AuthContext = createContext(null)
 const euras = supabase.schema('euras')
+
+function isIrrecoverableSessionError(error) {
+  const message = String(error?.message ?? '').toLowerCase()
+
+  return (
+    message.includes('refresh token') ||
+    message.includes('invalid refresh token') ||
+    message.includes('session missing') ||
+    message.includes('invalid_grant')
+  )
+}
 
 async function updateLastLoginIfAllowed(userId) {
   if (!userId) return
@@ -29,6 +40,7 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     let isMounted = true
+    let refreshingOnForeground = false
 
     async function bootstrapSession() {
       const { data, error } = await supabase.auth.getSession()
@@ -45,6 +57,39 @@ export function AuthProvider({ children }) {
       }
 
       setLoading(false)
+    }
+
+    async function refreshSessionWhenForeground() {
+      if (!isMounted || refreshingOnForeground) return
+
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+        return
+      }
+
+      refreshingOnForeground = true
+
+      try {
+        const refreshedSession = await ensureFreshSession({ minimumValiditySeconds: 120 })
+        if (!isMounted) return
+
+        setSession(refreshedSession)
+        setUser(refreshedSession.user ?? null)
+        setAuthError('')
+      } catch (error) {
+        if (!isMounted) return
+
+        if (isIrrecoverableSessionError(error)) {
+          setSession(null)
+          setUser(null)
+        }
+
+        setAuthError(error?.message ?? 'Nao foi possivel renovar a sessao.')
+      } finally {
+        if (isMounted) {
+          setLoading(false)
+        }
+        refreshingOnForeground = false
+      }
     }
 
     bootstrapSession()
@@ -64,9 +109,24 @@ export function AuthProvider({ children }) {
       }
     })
 
+    const onFocus = () => {
+      refreshSessionWhenForeground()
+    }
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        refreshSessionWhenForeground()
+      }
+    }
+
+    window.addEventListener('focus', onFocus)
+    document.addEventListener('visibilitychange', onVisibilityChange)
+
     return () => {
       isMounted = false
       subscription.unsubscribe()
+      window.removeEventListener('focus', onFocus)
+      document.removeEventListener('visibilitychange', onVisibilityChange)
     }
   }, [])
 

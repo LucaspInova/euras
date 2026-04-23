@@ -1892,6 +1892,14 @@ body {
   font-size: 0.78rem;
 }
 
+.partner-photo-preview {
+  width: 100%;
+  max-width: 104px;
+  max-height: 86px;
+  object-fit: cover;
+  border-radius: 6px;
+}
+
 .partner-hours-box {
   display: grid;
   gap: 10px;
@@ -2056,6 +2064,13 @@ body {
 .product-card-logo svg {
   width: 56px;
   height: 56px;
+}
+
+.product-card-image {
+  width: 100%;
+  min-height: 132px;
+  object-fit: cover;
+  border-radius: 8px;
 }
 
 .product-card-link {

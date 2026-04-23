@@ -117,10 +117,6 @@ export default function ProductDetail() {
     }
   }, [productId])
 
-  if (!loading && !loadError && !form) {
-    return <Navigate to="/produtos" replace />
-  }
-
   const handleFieldChange = (field) => (event) => {
     setForm((current) => ({ ...current, [field]: event.target.value }))
   }
@@ -170,6 +166,10 @@ export default function ProductDetail() {
       form.imageUrl !== initialForm.imageUrl
     )
   }, [form, initialForm])
+
+  if (!loading && !loadError && !form) {
+    return <Navigate to="/produtos" replace />
+  }
 
   const handleSubmit = async (event) => {
     event.preventDefault()

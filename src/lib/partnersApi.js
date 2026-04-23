@@ -1,394 +1,16 @@
-const MOCK_LATENCY_MS = 100
+import { ensureFreshSession, supabase } from './supabase'
 
-const baseSchedule = {
+const euras = supabase.schema('euras')
+
+const DEFAULT_SCHEDULE = {
   week: { open: true, openHour: '06', openMinute: '00', closeHour: '18', closeMinute: '00' },
   saturday: { open: true, openHour: '08', openMinute: '00', closeHour: '13', closeMinute: '00' },
   sunday: { open: false, openHour: '00', openMinute: '00', closeHour: '00', closeMinute: '00' },
 }
 
-const initialPartners = [
-  {
-    id: 'partner-1',
-    profileId: 'profile-1',
-    name: 'CEEDS MARACANAU',
-    user: 'EULA PAULA ROCHA',
-    phone: '(85)98888-1001',
-    email: 'maracanau@ceeds.com',
-    campus: 'MARACANAU',
-    imageUrl: '',
-    type: 'CEEDS',
-    active: true,
-    schedule: baseSchedule,
-  },
-  {
-    id: 'partner-2',
-    profileId: 'profile-2',
-    name: 'CEEDS REDENCAO',
-    user: 'ANA BEATRIZ MOTA',
-    phone: '(85)98888-1002',
-    email: 'redencao@ceeds.com',
-    campus: 'REDENCAO',
-    imageUrl: '',
-    type: 'CEEDS',
-    active: true,
-    schedule: {
-      week: { open: true, openHour: '07', openMinute: '00', closeHour: '19', closeMinute: '00' },
-      saturday: { open: true, openHour: '08', openMinute: '30', closeHour: '12', closeMinute: '30' },
-      sunday: { open: false, openHour: '00', openMinute: '00', closeHour: '00', closeMinute: '00' },
-    },
-  },
-  {
-    id: 'partner-3',
-    profileId: 'profile-3',
-    name: 'STUDIO D PILATES',
-    user: 'DANILO MORAES',
-    phone: '(85)98888-2001',
-    email: 'contato@studiod.com',
-    campus: 'MARACANAU',
-    imageUrl: '',
-    type: 'EXTERNO',
-    active: true,
-    schedule: {
-      week: { open: true, openHour: '09', openMinute: '00', closeHour: '20', closeMinute: '00' },
-      saturday: { open: true, openHour: '09', openMinute: '00', closeHour: '14', closeMinute: '00' },
-      sunday: { open: false, openHour: '00', openMinute: '00', closeHour: '00', closeMinute: '00' },
-    },
-  },
-  {
-    id: 'partner-4',
-    profileId: 'profile-4',
-    name: 'OTICA BOA VISAO',
-    user: 'MARIA CLARA SOUZA',
-    phone: '(85)98888-2002',
-    email: 'suporte@ob.com',
-    campus: 'PENTECOSTES',
-    imageUrl: '',
-    type: 'EXTERNO',
-    active: true,
-    schedule: {
-      week: { open: true, openHour: '08', openMinute: '00', closeHour: '17', closeMinute: '00' },
-      saturday: { open: true, openHour: '08', openMinute: '00', closeHour: '12', closeMinute: '00' },
-      sunday: { open: false, openHour: '00', openMinute: '00', closeHour: '00', closeMinute: '00' },
-    },
-  },
-  {
-    id: 'partner-5',
-    profileId: 'profile-5',
-    name: 'ODONTOCENTER PREMIUM',
-    user: 'JOAO VICENTE LIMA',
-    phone: '(85)98888-2003',
-    email: 'atendimento@odontocenter.com',
-    campus: 'REDENCAO',
-    imageUrl: '',
-    type: 'EXTERNO',
-    active: true,
-    schedule: {
-      week: { open: true, openHour: '08', openMinute: '30', closeHour: '18', closeMinute: '30' },
-      saturday: { open: false, openHour: '00', openMinute: '00', closeHour: '00', closeMinute: '00' },
-      sunday: { open: false, openHour: '00', openMinute: '00', closeHour: '00', closeMinute: '00' },
-    },
-  },
-  {
-    id: 'partner-6',
-    profileId: 'profile-6',
-    name: 'CEEDS PARACURU',
-    user: 'PAULO ROBERTO ALVES',
-    phone: '(85)98888-1006',
-    email: 'paracuru@ceeds.com',
-    campus: 'PARACURU',
-    imageUrl: '',
-    type: 'CEEDS',
-    active: true,
-    schedule: {
-      week: { open: true, openHour: '07', openMinute: '30', closeHour: '19', closeMinute: '00' },
-      saturday: { open: true, openHour: '08', openMinute: '00', closeHour: '13', closeMinute: '00' },
-      sunday: { open: false, openHour: '00', openMinute: '00', closeHour: '00', closeMinute: '00' },
-    },
-  },
-  {
-    id: 'partner-7',
-    profileId: 'profile-7',
-    name: 'ACADEMIA GERAO FIT',
-    user: 'RENATA SOUSA MENEZES',
-    phone: '(85)98888-2004',
-    email: 'contato@geraofit.com',
-    campus: 'MARACANAU',
-    imageUrl: '',
-    type: 'EXTERNO',
-    active: true,
-    schedule: {
-      week: { open: true, openHour: '05', openMinute: '30', closeHour: '22', closeMinute: '00' },
-      saturday: { open: true, openHour: '07', openMinute: '00', closeHour: '14', closeMinute: '00' },
-      sunday: { open: false, openHour: '00', openMinute: '00', closeHour: '00', closeMinute: '00' },
-    },
-  },
-  {
-    id: 'partner-8',
-    profileId: 'profile-8',
-    name: 'LIVRARIA SABER MAIS',
-    user: 'CARLOS ALBERTO FONTENELE',
-    phone: '(85)98888-2005',
-    email: 'atendimento@sabermais.com',
-    campus: 'REDENCAO',
-    imageUrl: '',
-    type: 'EXTERNO',
-    active: true,
-    schedule: {
-      week: { open: true, openHour: '08', openMinute: '00', closeHour: '19', closeMinute: '00' },
-      saturday: { open: true, openHour: '08', openMinute: '00', closeHour: '13', closeMinute: '00' },
-      sunday: { open: false, openHour: '00', openMinute: '00', closeHour: '00', closeMinute: '00' },
-    },
-  },
-  {
-    id: 'partner-9',
-    profileId: 'profile-9',
-    name: 'STUDIO DERMACARE',
-    user: 'BIANCA CASTRO RODRIGUES',
-    phone: '(85)98888-2006',
-    email: 'agenda@dermacare.com',
-    campus: 'PENTECOSTES',
-    imageUrl: '',
-    type: 'EXTERNO',
-    active: true,
-    schedule: {
-      week: { open: true, openHour: '09', openMinute: '00', closeHour: '20', closeMinute: '00' },
-      saturday: { open: true, openHour: '09', openMinute: '00', closeHour: '15', closeMinute: '00' },
-      sunday: { open: false, openHour: '00', openMinute: '00', closeHour: '00', closeMinute: '00' },
-    },
-  },
-  {
-    id: 'partner-10',
-    profileId: 'profile-10',
-    name: 'RESTAURANTE BOM SABOR',
-    user: 'FERNANDA MATIAS LOPES',
-    phone: '(85)98888-2007',
-    email: 'contato@bombsabor.com',
-    campus: 'MARACANAU',
-    imageUrl: '',
-    type: 'EXTERNO',
-    active: true,
-    schedule: {
-      week: { open: true, openHour: '11', openMinute: '00', closeHour: '23', closeMinute: '00' },
-      saturday: { open: true, openHour: '11', openMinute: '00', closeHour: '23', closeMinute: '30' },
-      sunday: { open: true, openHour: '11', openMinute: '30', closeHour: '22', closeMinute: '00' },
-    },
-  },
-]
-
-const initialProducts = [
-  {
-    id: 'product-1',
-    partnerId: 'partner-3',
-    title: 'Pacote Pilates Iniciante',
-    description: '4 sessoes com avaliacao inicial.',
-    priceEuras: 250,
-    imageUrl: '',
-    active: true,
-  },
-  {
-    id: 'product-2',
-    partnerId: 'partner-4',
-    title: 'Consulta Visual Completa',
-    description: 'Consulta oftalmologica com triagem.',
-    priceEuras: 180,
-    imageUrl: '',
-    active: true,
-  },
-  {
-    id: 'product-3',
-    partnerId: 'partner-5',
-    title: 'Limpeza Dental',
-    description: 'Sessao de profilaxia odontologica.',
-    priceEuras: 220,
-    imageUrl: '',
-    active: true,
-  },
-  {
-    id: 'product-4',
-    partnerId: 'partner-7',
-    title: 'Plano Academia Mensal',
-    description: 'Acesso livre na academia por 30 dias.',
-    priceEuras: 300,
-    imageUrl: '',
-    active: true,
-  },
-  {
-    id: 'product-5',
-    partnerId: 'partner-8',
-    title: 'Kit Material Escolar',
-    description: 'Caderno, canetas e lapis.',
-    priceEuras: 95,
-    imageUrl: '',
-    active: true,
-  },
-  {
-    id: 'product-6',
-    partnerId: 'partner-9',
-    title: 'Limpeza de Pele',
-    description: 'Sessao de limpeza de pele completa.',
-    priceEuras: 185,
-    imageUrl: '',
-    active: true,
-  },
-  {
-    id: 'product-7',
-    partnerId: 'partner-10',
-    title: 'Prato Executivo',
-    description: 'Refeicao completa no almoco.',
-    priceEuras: 70,
-    imageUrl: '',
-    active: true,
-  },
-  {
-    id: 'product-8',
-    partnerId: 'partner-3',
-    title: 'Aula Avulsa Pilates',
-    description: 'Sessao individual com instrutor.',
-    priceEuras: 90,
-    imageUrl: '',
-    active: true,
-  },
-  {
-    id: 'product-9',
-    partnerId: 'partner-4',
-    title: 'Lentes Com Desconto',
-    description: 'Desconto em lentes selecionadas.',
-    priceEuras: 210,
-    imageUrl: '',
-    active: true,
-  },
-]
-
-const initialCatalogProducts = [
-  {
-    id: 'catalog-product-1',
-    name: 'Bolsa 50%',
-    institution: 'Ceeds Maracanau',
-    description: 'Bolsa parcial para mensalidades.',
-    priceEuras: 80,
-    imageUrl: '',
-    active: true,
-  },
-  {
-    id: 'catalog-product-2',
-    name: 'Lavagem de aparelho -50%',
-    institution: 'Odonto Center Pacajus',
-    description: 'Lavagem e higienizacao de aparelho.',
-    priceEuras: 35,
-    imageUrl: '',
-    active: true,
-  },
-  {
-    id: 'catalog-product-3',
-    name: 'Armacao -10%',
-    institution: 'Otica do Brasileiro',
-    description: 'Desconto em armacao selecionada.',
-    priceEuras: 90,
-    imageUrl: '',
-    active: true,
-  },
-  {
-    id: 'catalog-product-4',
-    name: 'Alisamento cabelo -20%',
-    institution: 'Studio D Tiago Mello',
-    description: 'Desconto no procedimento completo.',
-    priceEuras: 120,
-    imageUrl: '',
-    active: true,
-  },
-  {
-    id: 'catalog-product-5',
-    name: 'Feijoada Bom Sabor 33%',
-    institution: 'Restaurante Bom Sabor',
-    description: 'Prato principal com acompanhamento.',
-    priceEuras: 75,
-    imageUrl: '',
-    active: true,
-  },
-  {
-    id: 'catalog-product-6',
-    name: 'Hamburguer da Casa 50%',
-    institution: 'Restaurante Bom Sabor',
-    description: 'Burger artesanal com batata.',
-    priceEuras: 60,
-    imageUrl: '',
-    active: true,
-  },
-  {
-    id: 'catalog-product-7',
-    name: 'Corte social',
-    institution: 'Studio Dermacare',
-    description: 'Corte de cabelo com finalizacao.',
-    priceEuras: 55,
-    imageUrl: '',
-    active: true,
-  },
-  {
-    id: 'catalog-product-8',
-    name: 'Sombrancelha',
-    institution: 'Studio Dermacare',
-    description: 'Design de sombrancelhas.',
-    priceEuras: 35,
-    imageUrl: '',
-    active: true,
-  },
-  {
-    id: 'catalog-product-9',
-    name: 'Barba modelada',
-    institution: 'Studio Dermacare',
-    description: 'Modelagem de barba com toalha quente.',
-    priceEuras: 40,
-    imageUrl: '',
-    active: true,
-  },
-  {
-    id: 'catalog-product-10',
-    name: 'Hidratacao capilar',
-    institution: 'Studio Dermacare',
-    description: 'Tratamento de hidratacao profunda.',
-    priceEuras: 48,
-    imageUrl: '',
-    active: true,
-  },
-  {
-    id: 'catalog-product-11',
-    name: 'Pacote academia trimestral',
-    institution: 'Academia Gerao Fit',
-    description: 'Plano trimestral com avaliacao fisica.',
-    priceEuras: 720,
-    imageUrl: '',
-    active: true,
-  },
-  {
-    id: 'catalog-product-12',
-    name: 'Combo cadernos universitarios',
-    institution: 'Livraria Saber Mais',
-    description: 'Pacote com 5 cadernos universitarios.',
-    priceEuras: 110,
-    imageUrl: '',
-    active: true,
-  },
-]
-
-let partners = initialPartners.map((partner) => ({
-  ...partner,
-  schedule: cloneSchedule(partner.schedule),
-}))
-let products = initialProducts.map((product) => ({ ...product }))
-let catalogProducts = initialCatalogProducts.map((product) => ({ ...product }))
-let nextPartnerNumber = initialPartners.length + 1
-let nextProductNumber = initialProducts.length + 1
-let nextCatalogProductNumber = initialCatalogProducts.length + 1
-
-function sleep() {
-  return new Promise((resolve) => {
-    window.setTimeout(resolve, MOCK_LATENCY_MS)
-  })
-}
-
 function normalizeTypeToGroup(partner) {
-  const type = String(partner.type ?? '').toLowerCase()
-  const name = String(partner.name ?? '').toLowerCase()
+  const type = String(partner?.type ?? '').toLowerCase()
+  const name = String(partner?.name ?? '').toLowerCase()
 
   if (type.includes('ceeds') || name.startsWith('ceeds')) {
     return 'ceeds'
@@ -402,7 +24,7 @@ function normalizeLogo(partner) {
     return { logo: 'CEEDS', variant: 'light' }
   }
 
-  const name = String(partner.name ?? '')
+  const name = String(partner?.name ?? '')
   const loweredName = name.toLowerCase()
 
   if (loweredName.includes('studio')) {
@@ -458,44 +80,6 @@ function cloneSchedule(schedule) {
   return normalizeSchedule(schedule)
 }
 
-function mapPartner(partner) {
-  const visual = normalizeLogo(partner)
-
-  return {
-    id: partner.id,
-    profileId: partner.profileId ?? null,
-    name: partner.name ?? '',
-    user: partner.user ?? '',
-    phone: partner.phone ?? '',
-    email: partner.email ?? '',
-    campus: partner.campus ?? '',
-    imageUrl: partner.imageUrl ?? '',
-    group: normalizeTypeToGroup(partner),
-    logo: visual.logo,
-    variant: visual.variant,
-    active: partner.active ?? true,
-  }
-}
-
-function getPartnerIndex(partnerId) {
-  return partners.findIndex((partner) => String(partner.id) === String(partnerId) && partner.active)
-}
-
-function getProductIndex(partnerId, productId) {
-  return products.findIndex(
-    (product) =>
-      String(product.partnerId) === String(partnerId) &&
-      String(product.id) === String(productId) &&
-      product.active,
-  )
-}
-
-function getCatalogProductIndex(productId) {
-  return catalogProducts.findIndex(
-    (product) => String(product.id) === String(productId) && product.active,
-  )
-}
-
 function parseEurasValue(value) {
   if (typeof value === 'number') {
     return value
@@ -515,145 +99,757 @@ function parseEurasValue(value) {
   return Number(normalized)
 }
 
-function mapCatalogProduct(product) {
+function isMissingRelationError(error) {
+  const message = String(error?.message ?? '').toLowerCase()
+  return error?.code === 'PGRST205' || message.includes('could not find the table') || message.includes('relation')
+}
+
+function ensureNumber(value, fallback = 0) {
+  const numeric = Number(value)
+  return Number.isFinite(numeric) ? numeric : fallback
+}
+
+function scheduleTimeToParts(value, fallbackHour, fallbackMinute) {
+  const text = String(value ?? '')
+  const [hour = fallbackHour, minute = fallbackMinute] = text.split(':')
+
+  return {
+    hour: normalizeHour(hour),
+    minute: normalizeMinute(minute),
+  }
+}
+
+function mapScheduleFromRows(rows) {
+  if (!Array.isArray(rows) || rows.length === 0) {
+    return cloneSchedule(DEFAULT_SCHEDULE)
+  }
+
+  const findFirst = (candidates) => rows.find((row) => candidates.includes(Number(row.dia_semana)))
+
+  const weekRow = findFirst([0, 1, 2, 3, 4, 5])
+  const saturdayRow = findFirst([6])
+  const sundayRow = findFirst([7])
+
+  const parseRow = (row, fallback) => {
+    if (!row) {
+      return { ...fallback }
+    }
+
+    const openParts = scheduleTimeToParts(row.abre_as, fallback.openHour, fallback.openMinute)
+    const closeParts = scheduleTimeToParts(row.fecha_as, fallback.closeHour, fallback.closeMinute)
+
+    return {
+      open: !row.fechado,
+      openHour: openParts.hour,
+      openMinute: openParts.minute,
+      closeHour: closeParts.hour,
+      closeMinute: closeParts.minute,
+    }
+  }
+
+  return {
+    week: parseRow(weekRow, DEFAULT_SCHEDULE.week),
+    saturday: parseRow(saturdayRow, DEFAULT_SCHEDULE.saturday),
+    sunday: parseRow(sundayRow, DEFAULT_SCHEDULE.sunday),
+  }
+}
+
+function mapPartner(row) {
+  const mapped = {
+    id: row.id,
+    profileId: row.perfil_parceiro_id ?? row.profile_id ?? null,
+    name: row.nome_instituicao ?? row.nome_completo ?? '',
+    user: row.usuario_responsavel_nome ?? row.nome_completo ?? '',
+    phone: row.telefone ?? '',
+    email: row.email ?? '',
+    campus: row.campus ?? '',
+    imageUrl: row.url_imagem ?? row.url_avatar ?? '',
+    type: row.tipo ?? 'externo',
+    active: row.ativo ?? true,
+  }
+
+  const visual = normalizeLogo(mapped)
+
+  return {
+    id: mapped.id,
+    profileId: mapped.profileId,
+    name: mapped.name,
+    user: mapped.user,
+    phone: mapped.phone,
+    email: mapped.email,
+    campus: mapped.campus,
+    imageUrl: mapped.imageUrl,
+    group: normalizeTypeToGroup(mapped),
+    logo: visual.logo,
+    variant: visual.variant,
+    active: mapped.active,
+  }
+}
+
+function mapPartnerProduct(product, partnerName) {
   return {
     id: product.id,
-    name: product.name ?? '',
-    institution: product.institution ?? '',
-    description: product.description ?? '',
-    priceEuras: product.priceEuras ?? 0,
-    imageUrl: product.imageUrl ?? '',
+    name: product.titulo ?? '',
+    description: product.descricao ?? '',
+    priceEuras: ensureNumber(product.preco_euras),
+    imageUrl: product.url_imagem ?? '',
+    partnerName,
   }
+}
+
+function mapCatalogProduct(product, institutionByProfileId) {
+  return {
+    id: product.id,
+    name: product.titulo ?? '',
+    institution: institutionByProfileId.get(product.perfil_parceiro_id) ?? 'Instituicao nao encontrada',
+    description: product.descricao ?? '',
+    priceEuras: ensureNumber(product.preco_euras),
+    imageUrl: product.url_imagem ?? '',
+  }
+}
+
+function asTimeString(hour, minute) {
+  return `${normalizeHour(hour)}:${normalizeMinute(minute)}:00`
+}
+
+function isInvalidPartnerTypeError(error) {
+  const message = String(error?.message ?? '').toLowerCase()
+  return message.includes('invalid input value for enum tipo_parceiro')
+}
+
+function buildPartnerTypeCandidates(name) {
+  const normalizedName = String(name ?? '').trim().toLowerCase()
+  const isCeeds = normalizedName.startsWith('ceeds')
+
+  const prioritized = isCeeds
+    ? ['ceeds', 'CEEDS', 'grupo_ceeds', 'institucional', 'interno']
+    : ['externo', 'EXTERNO', 'parceiro_externo', 'conveniado']
+
+  return [...new Set(prioritized)]
+}
+
+async function insertPartnerWithCompatibleType(payload) {
+  const typeCandidates = buildPartnerTypeCandidates(payload?.nome_instituicao)
+  let lastEnumError = null
+
+  for (const candidate of typeCandidates) {
+    const { data, error } = await euras
+      .from('parceiros')
+      .insert({
+        ...payload,
+        tipo: candidate,
+      })
+      .select('id')
+      .single()
+
+    if (!error) {
+      return { data, error: null }
+    }
+
+    if (isInvalidPartnerTypeError(error)) {
+      lastEnumError = error
+      continue
+    }
+
+    return { data: null, error }
+  }
+
+  const { data, error } = await euras
+    .from('parceiros')
+    .insert(payload)
+    .select('id')
+    .single()
+
+  if (error && lastEnumError && isInvalidPartnerTypeError(error)) {
+    return { data: null, error: lastEnumError }
+  }
+
+  return { data, error }
+}
+
+async function updatePartnerWithCompatibleType(partnerId, payload) {
+  const typeCandidates = buildPartnerTypeCandidates(payload?.nome_instituicao)
+  let lastEnumError = null
+
+  for (const candidate of typeCandidates) {
+    const { error } = await euras
+      .from('parceiros')
+      .update({
+        ...payload,
+        tipo: candidate,
+      })
+      .eq('id', partnerId)
+
+    if (!error) {
+      return { error: null }
+    }
+
+    if (isInvalidPartnerTypeError(error)) {
+      lastEnumError = error
+      continue
+    }
+
+    return { error }
+  }
+
+  const { error } = await euras
+    .from('parceiros')
+    .update(payload)
+    .eq('id', partnerId)
+
+  if (error && lastEnumError && isInvalidPartnerTypeError(error)) {
+    return { error: lastEnumError }
+  }
+
+  return { error }
+}
+
+async function listPartnersFromProfiles() {
+  const { data, error } = await euras
+    .from('perfis')
+    .select('id, nome_completo, telefone, email, campus, url_avatar, ativo')
+    .eq('papel', 'parceiro')
+    .eq('ativo', true)
+    .order('nome_completo', { ascending: true })
+
+  if (error) {
+    throw error
+  }
+
+  return (data ?? [])
+    .map((row) =>
+      mapPartner({
+        id: row.id,
+        perfil_parceiro_id: row.id,
+        nome_instituicao: row.nome_completo,
+        usuario_responsavel_nome: row.nome_completo,
+        telefone: row.telefone,
+        email: row.email,
+        campus: row.campus,
+        url_imagem: row.url_avatar,
+        tipo: row.nome_completo?.startsWith('CEEDS') ? 'ceeds' : 'externo',
+        ativo: row.ativo,
+      }),
+    )
+    .sort((a, b) => a.name.localeCompare(b.name))
+}
+
+async function loadPartnerScheduleMap(partnerIds) {
+  if (!Array.isArray(partnerIds) || partnerIds.length === 0) {
+    return new Map()
+  }
+
+  const { data, error } = await euras
+    .from('parceiro_horarios_funcionamento')
+    .select('parceiro_id, dia_semana, abre_as, fecha_as, fechado')
+    .in('parceiro_id', partnerIds)
+
+  if (error) {
+    if (isMissingRelationError(error)) {
+      return new Map()
+    }
+
+    throw error
+  }
+
+  const grouped = new Map()
+
+  for (const row of data ?? []) {
+    const key = String(row.parceiro_id)
+    const list = grouped.get(key) ?? []
+    list.push(row)
+    grouped.set(key, list)
+  }
+
+  const scheduleMap = new Map()
+  for (const [key, rows] of grouped.entries()) {
+    scheduleMap.set(key, mapScheduleFromRows(rows))
+  }
+
+  return scheduleMap
+}
+
+async function replacePartnerSchedule(partnerId, schedule) {
+  const normalized = normalizeSchedule(schedule)
+  const buildSafeScheduleRow = (day, item, fallbackOpenHour, fallbackCloseHour) => {
+    const isOpen = Boolean(item?.open)
+
+    return {
+      parceiro_id: partnerId,
+      dia_semana: day,
+      abre_as: asTimeString(isOpen ? item.openHour : fallbackOpenHour, isOpen ? item.openMinute : '00'),
+      fecha_as: asTimeString(isOpen ? item.closeHour : fallbackCloseHour, isOpen ? item.closeMinute : '00'),
+      fechado: !isOpen,
+    }
+  }
+
+  const rows = [
+    buildSafeScheduleRow(0, normalized.week, '08', '18'),
+    buildSafeScheduleRow(6, normalized.saturday, '08', '13'),
+    buildSafeScheduleRow(7, normalized.sunday, '08', '13'),
+  ]
+
+  const { error: deleteError } = await euras
+    .from('parceiro_horarios_funcionamento')
+    .delete()
+    .eq('parceiro_id', partnerId)
+
+  if (deleteError) {
+    if (isMissingRelationError(deleteError)) {
+      return
+    }
+
+    throw deleteError
+  }
+
+  const { error: insertError } = await euras
+    .from('parceiro_horarios_funcionamento')
+    .insert(rows)
+
+  if (insertError) {
+    throw insertError
+  }
+}
+
+async function loadInstitutionsByProfileIds(profileIds) {
+  const result = new Map()
+
+  if (!Array.isArray(profileIds) || profileIds.length === 0) {
+    return result
+  }
+
+  const { data: partnerRows, error: partnerError } = await euras
+    .from('parceiros')
+    .select('perfil_parceiro_id, nome_instituicao, ativo')
+    .in('perfil_parceiro_id', profileIds)
+
+  if (partnerError && !isMissingRelationError(partnerError)) {
+    throw partnerError
+  }
+
+  for (const row of partnerRows ?? []) {
+    if (row.ativo === false) continue
+    result.set(row.perfil_parceiro_id, row.nome_instituicao ?? 'Parceiro')
+  }
+
+  const missingProfileIds = profileIds.filter((profileId) => !result.has(profileId))
+
+  if (missingProfileIds.length === 0) {
+    return result
+  }
+
+  const { data: profileRows, error: profileError } = await euras
+    .from('perfis')
+    .select('id, nome_completo')
+    .in('id', missingProfileIds)
+
+  if (profileError) {
+    throw profileError
+  }
+
+  for (const row of profileRows ?? []) {
+    result.set(row.id, row.nome_completo ?? 'Parceiro')
+  }
+
+  return result
+}
+
+async function resolvePartnerProfileIdByInstitution(institution) {
+  const normalizedInstitution = String(institution ?? '').trim()
+  if (!normalizedInstitution) {
+    return null
+  }
+
+  const { data: partnerRow, error: partnerError } = await euras
+    .from('parceiros')
+    .select('perfil_parceiro_id')
+    .ilike('nome_instituicao', normalizedInstitution)
+    .eq('ativo', true)
+    .limit(1)
+    .maybeSingle()
+
+  if (partnerError && !isMissingRelationError(partnerError)) {
+    throw partnerError
+  }
+
+  if (partnerRow?.perfil_parceiro_id) {
+    return partnerRow.perfil_parceiro_id
+  }
+
+  const { data: profileRow, error: profileError } = await euras
+    .from('perfis')
+    .select('id')
+    .eq('papel', 'parceiro')
+    .ilike('nome_completo', normalizedInstitution)
+    .eq('ativo', true)
+    .limit(1)
+    .maybeSingle()
+
+  if (profileError) {
+    throw profileError
+  }
+
+  return profileRow?.id ?? null
+}
+
+async function getRawPartnerById(partnerId) {
+  const { data, error } = await euras
+    .from('parceiros')
+    .select('id, perfil_parceiro_id, nome_instituicao, usuario_responsavel_nome, telefone, email, campus, url_imagem, tipo, ativo')
+    .eq('id', partnerId)
+    .eq('ativo', true)
+    .limit(1)
+    .maybeSingle()
+
+  if (error) {
+    if (isMissingRelationError(error)) {
+      return null
+    }
+
+    throw error
+  }
+
+  return data
+}
+
+async function getRawPartnerProductById(profileId, productId) {
+  const { data, error } = await euras
+    .from('produtos')
+    .select('id, perfil_parceiro_id, titulo, descricao, preco_euras, url_imagem, ativo')
+    .eq('id', productId)
+    .eq('perfil_parceiro_id', profileId)
+    .eq('ativo', true)
+    .limit(1)
+    .maybeSingle()
+
+  if (error) {
+    throw error
+  }
+
+  return data
 }
 
 export function getPartnerApiErrorMessage(error) {
   const message = error?.message ?? ''
 
   if (!message) {
-    return 'Nao foi possivel concluir a operacao com os dados mockados de parceiros.'
+    return 'Nao foi possivel concluir a operacao no banco de parceiros.'
+  }
+
+  if (message.toLowerCase().includes('tempo limite')) {
+    return 'Conexao com o banco demorou demais. Tente novamente em instantes.'
+  }
+
+  if (message.toLowerCase().includes('sessao expirada')) {
+    return 'Sua sessao expirou. Faca login novamente.'
+  }
+
+  if (message.toLowerCase().includes('infinite recursion detected in policy')) {
+    return 'Erro de permissao no banco (RLS). Rode o script de correcao de policies e tente novamente.'
+  }
+
+  if (message.toLowerCase().includes('row-level security')) {
+    return 'Operacao bloqueada por permissao (RLS). Verifique se seu usuario e admin.'
+  }
+
+  if (message.toLowerCase().includes('invalid input value for enum tipo_parceiro')) {
+    return 'Valor de tipo de parceiro invalido no schema atual. Atualize o schema ou rode o script de bootstrap final.'
+  }
+
+  if (error?.code === '23503') {
+    return 'Nao foi possivel concluir a operacao por referencia invalida entre tabelas.'
+  }
+
+  if (error?.code === '23505') {
+    return 'Ja existe um registro com os mesmos dados unicos.'
   }
 
   if (message.toLowerCase().includes('nao encontrado')) {
-    return 'Registro nao encontrado na base mockada.'
+    return 'Registro nao encontrado no banco.'
   }
 
   return message
 }
 
 export async function listPartners() {
-  await sleep()
+  await ensureFreshSession()
 
-  return partners
-    .filter((partner) => partner.active)
-    .slice()
-    .sort((a, b) => a.name.localeCompare(b.name))
+  const { data, error } = await euras
+    .from('parceiros')
+    .select('id, perfil_parceiro_id, nome_instituicao, usuario_responsavel_nome, telefone, email, campus, url_imagem, tipo, ativo')
+    .eq('ativo', true)
+    .order('nome_instituicao', { ascending: true })
+
+  if (error) {
+    if (isMissingRelationError(error)) {
+      return listPartnersFromProfiles()
+    }
+
+    throw error
+  }
+
+  return (data ?? [])
     .map(mapPartner)
+    .sort((a, b) => a.name.localeCompare(b.name))
 }
 
 export async function getPartnerById(partnerId) {
-  await sleep()
+  await ensureFreshSession()
 
-  const partner = partners.find((item) => String(item.id) === String(partnerId) && item.active)
-  if (!partner) {
+  const partnerRow = await getRawPartnerById(partnerId)
+
+  if (partnerRow) {
+    const mappedPartner = mapPartner(partnerRow)
+    const scheduleMap = await loadPartnerScheduleMap([partnerRow.id])
+
+    return {
+      ...mappedPartner,
+      schedule: scheduleMap.get(String(partnerRow.id)) ?? cloneSchedule(DEFAULT_SCHEDULE),
+    }
+  }
+
+  const { data: profile, error: profileError } = await euras
+    .from('perfis')
+    .select('id, nome_completo, telefone, email, campus, url_avatar, ativo')
+    .eq('id', partnerId)
+    .eq('papel', 'parceiro')
+    .eq('ativo', true)
+    .limit(1)
+    .maybeSingle()
+
+  if (profileError) {
+    throw profileError
+  }
+
+  if (!profile) {
     return null
   }
 
   return {
-    ...mapPartner(partner),
-    schedule: cloneSchedule(partner.schedule),
+    ...mapPartner({
+      id: profile.id,
+      perfil_parceiro_id: profile.id,
+      nome_instituicao: profile.nome_completo,
+      usuario_responsavel_nome: profile.nome_completo,
+      telefone: profile.telefone,
+      email: profile.email,
+      campus: profile.campus,
+      url_imagem: profile.url_avatar,
+      tipo: profile.nome_completo?.startsWith('CEEDS') ? 'ceeds' : 'externo',
+      ativo: profile.ativo,
+    }),
+    schedule: cloneSchedule(DEFAULT_SCHEDULE),
   }
 }
 
-export async function createPartner({ name, user, phone, email, campus, schedule }) {
-  await sleep()
+export async function createPartner({ name, user, phone, email, campus, imageUrl, schedule }) {
+  await ensureFreshSession()
 
   const normalizedName = name?.trim().toUpperCase() ?? ''
   if (!normalizedName) {
     throw new Error('Informe o nome da instituicao.')
   }
 
-  const partnerId = `partner-${nextPartnerNumber}`
-  const isCeeds = normalizedName.startsWith('CEEDS')
+  const normalizedUser = user?.trim().toUpperCase() ?? normalizedName
+  const normalizedCampus = campus?.trim().toUpperCase() ?? ''
+  const normalizedImageUrl = imageUrl?.trim() ?? ''
 
-  partners.push({
-    id: partnerId,
-    profileId: `profile-${nextPartnerNumber}`,
-    name: normalizedName,
-    user: user?.trim().toUpperCase() ?? '',
-    phone: phone?.trim() ?? '',
+  const { data: profile, error: profileError } = await euras
+    .from('perfis')
+    .insert({
+      nome_completo: normalizedUser,
+      papel: 'parceiro',
+      telefone: phone?.trim() ?? '',
+      email: email?.trim() ?? '',
+      campus: normalizedCampus,
+      url_avatar: normalizedImageUrl,
+      ativo: true,
+    })
+    .select('id')
+    .single()
+
+  if (profileError) {
+    throw profileError
+  }
+
+  const partnerPayload = {
+    perfil_parceiro_id: profile.id,
+    nome_instituicao: normalizedName,
+    usuario_responsavel_nome: normalizedUser,
+    telefone: phone?.trim() ?? '',
     email: email?.trim() ?? '',
-    campus: campus?.trim().toUpperCase() ?? '',
-    imageUrl: '',
-    type: isCeeds ? 'CEEDS' : 'EXTERNO',
-    active: true,
-    schedule: normalizeSchedule(schedule),
-  })
+    campus: normalizedCampus,
+    url_imagem: normalizedImageUrl,
+    ativo: true,
+  }
 
-  nextPartnerNumber += 1
-  return partnerId
+  const { data: partner, error: partnerError } = await insertPartnerWithCompatibleType(partnerPayload)
+
+  if (partnerError) {
+    if (isMissingRelationError(partnerError)) {
+      return profile.id
+    }
+
+    throw partnerError
+  }
+
+  await replacePartnerSchedule(partner.id, schedule)
+  return partner.id
 }
 
-export async function updatePartner(partnerId, { name, user, phone, email, campus, schedule }) {
-  await sleep()
+export async function updatePartner(partnerId, { name, user, phone, email, campus, imageUrl, schedule }) {
+  await ensureFreshSession()
 
-  const index = getPartnerIndex(partnerId)
-  if (index < 0) {
-    throw new Error('Parceiro nao encontrado.')
+  const partnerRow = await getRawPartnerById(partnerId)
+
+  if (!partnerRow) {
+    const profileUpdate = {
+      nome_completo: user?.trim().toUpperCase() || name?.trim().toUpperCase(),
+      telefone: phone?.trim() ?? '',
+      email: email?.trim() ?? '',
+      campus: campus?.trim().toUpperCase() ?? '',
+      url_avatar: imageUrl?.trim() ?? '',
+    }
+
+    const { data: updatedProfile, error: profileError } = await euras
+      .from('perfis')
+      .update(profileUpdate)
+      .eq('id', partnerId)
+      .eq('papel', 'parceiro')
+      .eq('ativo', true)
+      .select('id')
+      .maybeSingle()
+
+    if (profileError) {
+      throw profileError
+    }
+
+    if (!updatedProfile) {
+      throw new Error('Parceiro nao encontrado.')
+    }
+
+    return
   }
 
-  partners[index] = {
-    ...partners[index],
-    name: name?.trim().toUpperCase() || partners[index].name,
-    user: user?.trim().toUpperCase() ?? '',
-    phone: phone?.trim() ?? '',
+  const normalizedName = name?.trim().toUpperCase() || partnerRow.nome_instituicao
+  const normalizedUser = user?.trim().toUpperCase() ?? partnerRow.usuario_responsavel_nome ?? normalizedName
+  const normalizedCampus = campus?.trim().toUpperCase() ?? partnerRow.campus ?? ''
+  const normalizedImageUrl = imageUrl?.trim() ?? partnerRow.url_imagem ?? ''
+
+  const { error: partnerError } = await updatePartnerWithCompatibleType(partnerId, {
+    nome_instituicao: normalizedName,
+    usuario_responsavel_nome: normalizedUser,
+    telefone: phone?.trim() ?? '',
     email: email?.trim() ?? '',
-    campus: campus?.trim().toUpperCase() ?? '',
-    schedule: normalizeSchedule(schedule),
+    campus: normalizedCampus,
+    url_imagem: normalizedImageUrl,
+  })
+
+  if (partnerError) {
+    throw partnerError
   }
+
+  if (partnerRow.perfil_parceiro_id) {
+    const { error: profileError } = await euras
+      .from('perfis')
+      .update({
+        nome_completo: normalizedUser,
+        telefone: phone?.trim() ?? '',
+        email: email?.trim() ?? '',
+        campus: normalizedCampus,
+        url_avatar: normalizedImageUrl,
+      })
+      .eq('id', partnerRow.perfil_parceiro_id)
+
+    if (profileError) {
+      throw profileError
+    }
+  }
+
+  await replacePartnerSchedule(partnerId, schedule)
 }
 
 export async function removePartner(partnerId) {
-  await sleep()
+  await ensureFreshSession()
 
-  const index = getPartnerIndex(partnerId)
-  if (index < 0) {
-    throw new Error('Parceiro nao encontrado.')
+  const partnerRow = await getRawPartnerById(partnerId)
+
+  if (!partnerRow) {
+    const { data: profile, error: profileError } = await euras
+      .from('perfis')
+      .update({ ativo: false })
+      .eq('id', partnerId)
+      .eq('papel', 'parceiro')
+      .select('id')
+      .maybeSingle()
+
+    if (profileError) {
+      throw profileError
+    }
+
+    if (!profile) {
+      throw new Error('Parceiro nao encontrado.')
+    }
+
+    return
   }
 
-  partners[index] = {
-    ...partners[index],
-    active: false,
+  const { error: partnerError } = await euras
+    .from('parceiros')
+    .update({ ativo: false })
+    .eq('id', partnerId)
+
+  if (partnerError) {
+    throw partnerError
+  }
+
+  if (partnerRow.perfil_parceiro_id) {
+    const { error: profileError } = await euras
+      .from('perfis')
+      .update({ ativo: false })
+      .eq('id', partnerRow.perfil_parceiro_id)
+
+    if (profileError) {
+      throw profileError
+    }
   }
 }
 
 export async function listPartnerProducts(partnerId) {
+  await ensureFreshSession()
+
   const partner = await getPartnerById(partnerId)
 
   if (!partner) {
     return { partner: null, products: [] }
   }
 
-  await sleep()
+  if (!partner.profileId) {
+    return { partner, products: [] }
+  }
 
-  const partnerProducts = products
-    .filter((product) => String(product.partnerId) === String(partner.id) && product.active)
-    .slice()
-    .sort((a, b) => a.title.localeCompare(b.title))
-    .map((product) => ({
-      id: product.id,
-      name: product.title ?? '',
-      description: product.description ?? '',
-      priceEuras: product.priceEuras ?? 0,
-      imageUrl: product.imageUrl ?? '',
-      partnerName: partner.name,
-    }))
+  const { data, error } = await euras
+    .from('produtos')
+    .select('id, perfil_parceiro_id, titulo, descricao, preco_euras, url_imagem, ativo')
+    .eq('perfil_parceiro_id', partner.profileId)
+    .eq('ativo', true)
+    .order('titulo', { ascending: true })
 
-  return { partner, products: partnerProducts }
+  if (error) {
+    throw error
+  }
+
+  return {
+    partner,
+    products: (data ?? []).map((product) => mapPartnerProduct(product, partner.name)),
+  }
 }
 
 export async function createPartnerProduct(partnerId, { title, description, priceEuras, imageUrl }) {
+  await ensureFreshSession()
+
   const partner = await getPartnerById(partnerId)
-  if (!partner) {
+  if (!partner || !partner.profileId) {
     throw new Error('Parceiro nao encontrado.')
   }
 
@@ -667,35 +863,31 @@ export async function createPartnerProduct(partnerId, { title, description, pric
     throw new Error('Informe um preco de Euras valido.')
   }
 
-  await sleep()
+  const { error } = await euras
+    .from('produtos')
+    .insert({
+      perfil_parceiro_id: partner.profileId,
+      titulo: normalizedTitle,
+      descricao: description?.trim() ?? '',
+      preco_euras: numericPrice,
+      url_imagem: imageUrl?.trim() ?? '',
+      ativo: true,
+    })
 
-  products.push({
-    id: `product-${nextProductNumber}`,
-    partnerId: partner.id,
-    title: normalizedTitle,
-    description: description?.trim() ?? '',
-    priceEuras: numericPrice,
-    imageUrl: imageUrl?.trim() ?? '',
-    active: true,
-  })
-
-  nextProductNumber += 1
+  if (error) {
+    throw error
+  }
 }
 
 export async function getPartnerProductById(partnerId, productId) {
+  await ensureFreshSession()
+
   const partner = await getPartnerById(partnerId)
-  if (!partner) {
+  if (!partner || !partner.profileId) {
     return null
   }
 
-  await sleep()
-
-  const product = products.find(
-    (item) =>
-      String(item.partnerId) === String(partnerId) &&
-      String(item.id) === String(productId) &&
-      item.active,
-  )
+  const product = await getRawPartnerProductById(partner.profileId, productId)
 
   if (!product) {
     return null
@@ -703,23 +895,25 @@ export async function getPartnerProductById(partnerId, productId) {
 
   return {
     id: product.id,
-    title: product.title ?? '',
-    description: product.description ?? '',
-    priceEuras: product.priceEuras ?? 0,
-    imageUrl: product.imageUrl ?? '',
+    title: product.titulo ?? '',
+    description: product.descricao ?? '',
+    priceEuras: ensureNumber(product.preco_euras),
+    imageUrl: product.url_imagem ?? '',
     partnerId: partner.id,
     partnerName: partner.name,
   }
 }
 
 export async function updatePartnerProduct(partnerId, productId, { title, description, priceEuras, imageUrl }) {
+  await ensureFreshSession()
+
   const partner = await getPartnerById(partnerId)
-  if (!partner) {
+  if (!partner || !partner.profileId) {
     throw new Error('Parceiro nao encontrado.')
   }
 
-  const index = getProductIndex(partnerId, productId)
-  if (index < 0) {
+  const currentProduct = await getRawPartnerProductById(partner.profileId, productId)
+  if (!currentProduct) {
     throw new Error('Produto nao encontrado.')
   }
 
@@ -728,47 +922,71 @@ export async function updatePartnerProduct(partnerId, productId, { title, descri
     throw new Error('Informe um preco de Euras valido.')
   }
 
-  await sleep()
+  const { error } = await euras
+    .from('produtos')
+    .update({
+      titulo: title?.trim() || currentProduct.titulo,
+      descricao: description?.trim() ?? '',
+      preco_euras: numericPrice,
+      url_imagem: imageUrl?.trim() ?? '',
+    })
+    .eq('id', productId)
+    .eq('perfil_parceiro_id', partner.profileId)
 
-  products[index] = {
-    ...products[index],
-    title: title?.trim() || products[index].title,
-    description: description?.trim() ?? '',
-    priceEuras: numericPrice,
-    imageUrl: imageUrl?.trim() ?? '',
+  if (error) {
+    throw error
   }
 }
 
 export async function removePartnerProduct(partnerId, productId) {
+  await ensureFreshSession()
+
   const partner = await getPartnerById(partnerId)
-  if (!partner) {
+  if (!partner || !partner.profileId) {
     throw new Error('Parceiro nao encontrado.')
   }
 
-  const index = getProductIndex(partnerId, productId)
-  if (index < 0) {
+  const product = await getRawPartnerProductById(partner.profileId, productId)
+  if (!product) {
     throw new Error('Produto nao encontrado.')
   }
 
-  await sleep()
+  const { error } = await euras
+    .from('produtos')
+    .update({ ativo: false })
+    .eq('id', productId)
+    .eq('perfil_parceiro_id', partner.profileId)
 
-  products[index] = {
-    ...products[index],
-    active: false,
+  if (error) {
+    throw error
   }
 }
 
 export async function listProducts() {
-  await sleep()
+  await ensureFreshSession()
 
-  return catalogProducts
-    .filter((product) => product.active)
-    .slice()
+  const { data, error } = await euras
+    .from('produtos')
+    .select('id, perfil_parceiro_id, titulo, descricao, preco_euras, url_imagem, ativo')
+    .eq('ativo', true)
+    .order('titulo', { ascending: true })
+
+  if (error) {
+    throw error
+  }
+
+  const products = data ?? []
+  const profileIds = [...new Set(products.map((product) => product.perfil_parceiro_id).filter(Boolean))]
+  const institutionByProfileId = await loadInstitutionsByProfileIds(profileIds)
+
+  return products
+    .map((product) => mapCatalogProduct(product, institutionByProfileId))
     .sort((a, b) => a.name.localeCompare(b.name))
-    .map(mapCatalogProduct)
 }
 
 export async function createProduct({ name, institution, description, priceEuras, imageUrl }) {
+  await ensureFreshSession()
+
   const normalizedName = name?.trim() ?? ''
   if (!normalizedName) {
     throw new Error('Informe o nome do produto.')
@@ -784,34 +1002,66 @@ export async function createProduct({ name, institution, description, priceEuras
     throw new Error('Informe um valor valido para o produto.')
   }
 
-  await sleep()
+  const profileId = await resolvePartnerProfileIdByInstitution(normalizedInstitution)
+  if (!profileId) {
+    throw new Error('Instituicao nao cadastrada como parceiro. Cadastre o parceiro antes de criar o produto.')
+  }
 
-  catalogProducts.push({
-    id: `catalog-product-${nextCatalogProductNumber}`,
-    name: normalizedName,
-    institution: normalizedInstitution,
-    description: description?.trim() ?? '',
-    priceEuras: numericPrice,
-    imageUrl: imageUrl?.trim() ?? '',
-    active: true,
-  })
+  const { error } = await euras
+    .from('produtos')
+    .insert({
+      perfil_parceiro_id: profileId,
+      titulo: normalizedName,
+      descricao: description?.trim() ?? '',
+      preco_euras: numericPrice,
+      url_imagem: imageUrl?.trim() ?? '',
+      ativo: true,
+    })
 
-  nextCatalogProductNumber += 1
+  if (error) {
+    throw error
+  }
 }
 
 export async function getProductById(productId) {
-  await sleep()
+  await ensureFreshSession()
 
-  const product = catalogProducts.find(
-    (item) => String(item.id) === String(productId) && item.active,
-  )
+  const { data: product, error } = await euras
+    .from('produtos')
+    .select('id, perfil_parceiro_id, titulo, descricao, preco_euras, url_imagem, ativo')
+    .eq('id', productId)
+    .eq('ativo', true)
+    .limit(1)
+    .maybeSingle()
 
-  return product ? mapCatalogProduct(product) : null
+  if (error) {
+    throw error
+  }
+
+  if (!product) {
+    return null
+  }
+
+  const institutionByProfileId = await loadInstitutionsByProfileIds([product.perfil_parceiro_id])
+  return mapCatalogProduct(product, institutionByProfileId)
 }
 
 export async function updateProduct(productId, { name, institution, description, priceEuras, imageUrl }) {
-  const index = getCatalogProductIndex(productId)
-  if (index < 0) {
+  await ensureFreshSession()
+
+  const { data: currentProduct, error: findError } = await euras
+    .from('produtos')
+    .select('id')
+    .eq('id', productId)
+    .eq('ativo', true)
+    .limit(1)
+    .maybeSingle()
+
+  if (findError) {
+    throw findError
+  }
+
+  if (!currentProduct) {
     throw new Error('Produto nao encontrado.')
   }
 
@@ -830,28 +1080,52 @@ export async function updateProduct(productId, { name, institution, description,
     throw new Error('Informe um valor valido para o produto.')
   }
 
-  await sleep()
+  const profileId = await resolvePartnerProfileIdByInstitution(normalizedInstitution)
+  if (!profileId) {
+    throw new Error('Instituicao nao cadastrada como parceiro. Cadastre o parceiro antes de salvar o produto.')
+  }
 
-  catalogProducts[index] = {
-    ...catalogProducts[index],
-    name: normalizedName,
-    institution: normalizedInstitution,
-    description: description?.trim() ?? '',
-    priceEuras: numericPrice,
-    imageUrl: imageUrl?.trim() ?? '',
+  const { error } = await euras
+    .from('produtos')
+    .update({
+      perfil_parceiro_id: profileId,
+      titulo: normalizedName,
+      descricao: description?.trim() ?? '',
+      preco_euras: numericPrice,
+      url_imagem: imageUrl?.trim() ?? '',
+    })
+    .eq('id', productId)
+
+  if (error) {
+    throw error
   }
 }
 
 export async function removeProduct(productId) {
-  const index = getCatalogProductIndex(productId)
-  if (index < 0) {
+  await ensureFreshSession()
+
+  const { data, error: findError } = await euras
+    .from('produtos')
+    .select('id')
+    .eq('id', productId)
+    .eq('ativo', true)
+    .limit(1)
+    .maybeSingle()
+
+  if (findError) {
+    throw findError
+  }
+
+  if (!data) {
     throw new Error('Produto nao encontrado.')
   }
 
-  await sleep()
+  const { error } = await euras
+    .from('produtos')
+    .update({ ativo: false })
+    .eq('id', productId)
 
-  catalogProducts[index] = {
-    ...catalogProducts[index],
-    active: false,
+  if (error) {
+    throw error
   }
 }

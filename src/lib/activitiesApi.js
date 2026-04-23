@@ -1,41 +1,35 @@
-const MOCK_LATENCY_MS = 90
+import { ensureFreshSession, supabase } from './supabase'
 
-const initialActivities = [
-  { id: 'activity-1', studentName: 'Ana Maria de Souza Azevedo', description: 'Maior nota da turma', amountEuras: 100, date: '2026-02-05', time: '18:59' },
-  { id: 'activity-2', studentName: 'Anderson Silva Santos', description: 'Sem faltas no semestre', amountEuras: 65, date: '2026-02-05', time: '17:01' },
-  { id: 'activity-3', studentName: 'Eduardo Silva Peixe', description: 'Semestre concluido', amountEuras: 50, date: '2026-02-04', time: '13:22' },
-  { id: 'activity-4', studentName: 'Luan Victor Pires Filho', description: 'Rematricula', amountEuras: 80, date: '2026-02-02', time: '15:00' },
-  { id: 'activity-5', studentName: 'Vanessa Alencar Carvalho', description: 'Rematricula', amountEuras: 80, date: '2026-02-02', time: '14:57' },
-  { id: 'activity-6', studentName: 'Livia Moreira Mota', description: 'Indicacao aprovada', amountEuras: 35, date: '2026-02-01', time: '11:12' },
-  { id: 'activity-7', studentName: 'Bruno Martins Ribeiro', description: 'Participacao no evento academico', amountEuras: 20, date: '2026-01-31', time: '10:45' },
-  { id: 'activity-8', studentName: 'Camila Almeida Souza', description: 'Projeto de extensao entregue', amountEuras: 70, date: '2026-01-30', time: '19:40' },
-  { id: 'activity-9', studentName: 'Daniel Oliveira Costa', description: 'Monitoria finalizada', amountEuras: 55, date: '2026-01-29', time: '16:08' },
-  { id: 'activity-10', studentName: 'Ester Lima Freitas', description: 'Sem faltas no mes', amountEuras: 40, date: '2026-01-28', time: '18:00' },
-  { id: 'activity-11', studentName: 'Fabio Henrique Rocha', description: 'Participacao em olimpiada', amountEuras: 75, date: '2026-01-27', time: '08:33' },
-  { id: 'activity-12', studentName: 'Gabriela Nunes Pereira', description: 'Rematricula', amountEuras: 80, date: '2026-01-26', time: '14:31' },
-  { id: 'activity-13', studentName: 'Helena Barros de Lima', description: 'Prova com nota maxima', amountEuras: 95, date: '2026-01-25', time: '20:11' },
-  { id: 'activity-14', studentName: 'Igor Moura Freire', description: 'Sem atrasos no trimestre', amountEuras: 32, date: '2026-01-24', time: '09:18' },
-  { id: 'activity-15', studentName: 'Joana Cristina Alves', description: 'Projeto interdisciplinar aprovado', amountEuras: 60, date: '2026-01-23', time: '12:50' },
-  { id: 'activity-16', studentName: 'Kaique Teles Macedo', description: 'Participacao em oficina', amountEuras: 18, date: '2026-01-22', time: '17:26' },
-  { id: 'activity-17', studentName: 'Larissa Teixeira Araujo', description: 'Sem faltas no semestre', amountEuras: 65, date: '2026-01-21', time: '18:58' },
-  { id: 'activity-18', studentName: 'Marcos Vinicius Nobre', description: 'Rematricula', amountEuras: 80, date: '2026-01-20', time: '16:02' },
-  { id: 'activity-19', studentName: 'Nathalia Prado Ferreira', description: 'Desafio academico concluido', amountEuras: 45, date: '2026-01-19', time: '10:06' },
-  { id: 'activity-20', studentName: 'Otavio Lopes Campos', description: 'Monitoria concluida', amountEuras: 55, date: '2026-01-18', time: '11:55' },
-  { id: 'activity-21', studentName: 'Paula Raquel Almeida', description: 'Maior media da disciplina', amountEuras: 88, date: '2026-01-17', time: '13:37' },
-  { id: 'activity-22', studentName: 'Rafael Gomes Siqueira', description: 'Sem ocorrencias no periodo', amountEuras: 27, date: '2026-01-16', time: '14:09' },
-  { id: 'activity-23', studentName: 'Sara Menezes Costa', description: 'Participacao em palestra', amountEuras: 14, date: '2026-01-15', time: '08:41' },
-  { id: 'activity-24', studentName: 'Tiago Lucas Fernandes', description: 'Rematricula', amountEuras: 80, date: '2026-01-14', time: '15:15' },
-]
+const euras = supabase.schema('euras')
 
-let activities = initialActivities.map((activity) => ({ ...activity }))
-
-function sleep() {
-  return new Promise((resolve) => {
-    window.setTimeout(resolve, MOCK_LATENCY_MS)
-  })
+function isMissingRelationError(error) {
+  const message = String(error?.message ?? '').toLowerCase()
+  return error?.code === 'PGRST205' || message.includes('could not find the table') || message.includes('relation')
 }
 
-function compareActivitiesDesc(a, b) {
+function toDateTimeParts(value) {
+  const parsed = new Date(value)
+
+  if (Number.isNaN(parsed.getTime())) {
+    return {
+      date: '1970-01-01',
+      time: '00:00',
+    }
+  }
+
+  const year = parsed.getFullYear()
+  const month = String(parsed.getMonth() + 1).padStart(2, '0')
+  const day = String(parsed.getDate()).padStart(2, '0')
+  const hour = String(parsed.getHours()).padStart(2, '0')
+  const minute = String(parsed.getMinutes()).padStart(2, '0')
+
+  return {
+    date: `${year}-${month}-${day}`,
+    time: `${hour}:${minute}`,
+  }
+}
+
+function sortActivitiesDesc(a, b) {
   if (a.date !== b.date) {
     return b.date.localeCompare(a.date)
   }
@@ -43,21 +37,204 @@ function compareActivitiesDesc(a, b) {
   return b.time.localeCompare(a.time)
 }
 
+async function loadStudentNameMap(studentIds) {
+  const map = new Map()
+
+  if (!Array.isArray(studentIds) || studentIds.length === 0) {
+    return map
+  }
+
+  const { data: profileRows, error: profileError } = await euras
+    .from('perfis')
+    .select('id, nome_completo')
+    .in('id', studentIds)
+
+  if (profileError && !isMissingRelationError(profileError)) {
+    throw profileError
+  }
+
+  for (const row of profileRows ?? []) {
+    map.set(row.id, row.nome_completo ?? 'Aluno')
+  }
+
+  const remainingIds = studentIds.filter((id) => !map.has(id))
+
+  if (remainingIds.length === 0) {
+    return map
+  }
+
+  const { data: studentRows, error: studentError } = await euras
+    .from('alunos')
+    .select('id, nome_completo')
+    .in('id', remainingIds)
+
+  if (studentError && !isMissingRelationError(studentError)) {
+    throw studentError
+  }
+
+  for (const row of studentRows ?? []) {
+    map.set(row.id, row.nome_completo ?? 'Aluno')
+  }
+
+  return map
+}
+
+async function loadActivitySnapshotMap(activityIds) {
+  const map = new Map()
+
+  if (!Array.isArray(activityIds) || activityIds.length === 0) {
+    return map
+  }
+
+  const { data, error } = await euras
+    .from('atividades')
+    .select('id, titulo, descricao')
+    .in('id', activityIds)
+
+  if (error) {
+    if (isMissingRelationError(error)) {
+      return map
+    }
+
+    throw error
+  }
+
+  for (const row of data ?? []) {
+    map.set(row.id, row)
+  }
+
+  return map
+}
+
+async function listActivitiesFromAwards() {
+  const { data, error } = await euras
+    .from('atividades_concedidas')
+    .select('id, atividade_id, aluno_id, valor_euras, titulo_snapshot, descricao_snapshot, concedido_em, observacao')
+    .order('concedido_em', { ascending: false })
+
+  if (error) {
+    if (isMissingRelationError(error)) {
+      return null
+    }
+
+    throw error
+  }
+
+  const items = data ?? []
+  if (items.length === 0) {
+    return []
+  }
+
+  const studentIds = [...new Set(items.map((item) => item.aluno_id).filter(Boolean))]
+  const activityIds = [...new Set(items.map((item) => item.atividade_id).filter(Boolean))]
+
+  const [studentNameMap, activitySnapshotMap] = await Promise.all([
+    loadStudentNameMap(studentIds),
+    loadActivitySnapshotMap(activityIds),
+  ])
+
+  return items
+    .map((item) => {
+      const timestamp = item.concedido_em
+      const dateTime = toDateTimeParts(timestamp)
+      const activitySnapshot = activitySnapshotMap.get(item.atividade_id)
+
+      return {
+        id: item.id,
+        studentName: studentNameMap.get(item.aluno_id) ?? 'Aluno',
+        description:
+          item.descricao_snapshot ??
+          item.titulo_snapshot ??
+          activitySnapshot?.descricao ??
+          activitySnapshot?.titulo ??
+          item.observacao ??
+          'Atividade registrada',
+        amountEuras: Number(item.valor_euras ?? 0),
+        date: dateTime.date,
+        time: dateTime.time,
+      }
+    })
+    .sort(sortActivitiesDesc)
+}
+
+async function listActivitiesFromLegacyEntries() {
+  const { data: entries, error: entriesError } = await euras
+    .from('lancamentos_alunos')
+    .select('id, aluno_id, tipo, valor, observacao, criado_em')
+    .in('tipo', ['credito', 'ajuste'])
+    .order('criado_em', { ascending: false })
+
+  if (entriesError) {
+    if (isMissingRelationError(entriesError)) {
+      return []
+    }
+
+    throw entriesError
+  }
+
+  const rows = entries ?? []
+  if (rows.length === 0) {
+    return []
+  }
+
+  const studentIds = [...new Set(rows.map((row) => row.aluno_id).filter(Boolean))]
+  const studentNameMap = await loadStudentNameMap(studentIds)
+
+  return rows
+    .map((row) => {
+      const dateTime = toDateTimeParts(row.criado_em)
+
+      return {
+        id: row.id,
+        studentName: studentNameMap.get(row.aluno_id) ?? 'Aluno',
+        description: row.observacao ?? 'Lancamento de Euras',
+        amountEuras: Number(row.valor ?? 0),
+        date: dateTime.date,
+        time: dateTime.time,
+      }
+    })
+    .sort(sortActivitiesDesc)
+}
+
 export function getActivitiesApiErrorMessage(error) {
   const message = error?.message ?? ''
 
   if (!message) {
-    return 'Nao foi possivel carregar as atividades mockadas.'
+    return 'Nao foi possivel carregar as atividades do banco.'
+  }
+
+  if (message.toLowerCase().includes('tempo limite')) {
+    return 'Conexao com o banco demorou demais. Tente novamente em instantes.'
+  }
+
+  if (message.toLowerCase().includes('sessao expirada')) {
+    return 'Sua sessao expirou. Faca login novamente.'
+  }
+
+  if (message.toLowerCase().includes('infinite recursion detected in policy')) {
+    return 'Erro de permissao no banco (RLS). Rode o script de correcao de policies e tente novamente.'
+  }
+
+  if (message.toLowerCase().includes('row-level security')) {
+    return 'Operacao bloqueada por permissao (RLS). Verifique se seu usuario e admin.'
   }
 
   return message
 }
 
 export async function listActivities() {
-  await sleep()
+  await ensureFreshSession()
 
-  return activities
-    .slice()
-    .sort(compareActivitiesDesc)
-    .map((activity) => ({ ...activity }))
+  const activitiesFromAwards = await listActivitiesFromAwards()
+
+  if (activitiesFromAwards !== null && activitiesFromAwards.length > 0) {
+    return activitiesFromAwards
+  }
+
+  const legacyActivities = await listActivitiesFromLegacyEntries()
+  if (legacyActivities.length > 0) {
+    return legacyActivities
+  }
+
+  return activitiesFromAwards ?? []
 }
