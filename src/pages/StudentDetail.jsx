@@ -74,7 +74,7 @@ export default function StudentDetail() {
           return
         }
 
-        console.info('Nao foi possivel carregar o aluno na base mockada.', error)
+        console.info('Não foi possível carregar o aluno na base mockada.', error)
         setLoadError(getStudentApiErrorMessage(error))
       } finally {
         if (active) {
@@ -114,7 +114,7 @@ export default function StudentDetail() {
       setStudent(updatedStudent)
       setForm(updatedStudent)
     } catch (error) {
-      console.info('Nao foi possivel atualizar o aluno na base mockada.', error)
+      console.info('Não foi possível atualizar o aluno na base mockada.', error)
       setSaveError(getStudentApiErrorMessage(error))
     }
   }
@@ -126,7 +126,7 @@ export default function StudentDetail() {
       await removeStudent(student.id)
       navigate('/alunos', { replace: true })
     } catch (error) {
-      console.info('Nao foi possivel remover o aluno da base mockada.', error)
+      console.info('Não foi possível remover o aluno da base mockada.', error)
       setSaveError(getStudentApiErrorMessage(error))
       setIsRemoving(false)
     }
@@ -163,7 +163,7 @@ export default function StudentDetail() {
               </div>
 
               <div className="student-field student-detail-field">
-                <span>Numero:</span>
+                <span>Número:</span>
                 <input
                   type="text"
                   value={form.phone}
@@ -246,7 +246,7 @@ export default function StudentDetail() {
               <button
                 type="button"
                 className="student-modal-close"
-                aria-label="Fechar aviso de remocao"
+                aria-label="Fechar aviso de remoção"
                 onClick={() => setShowDeleteModal(false)}
               >
                 <CloseIcon />

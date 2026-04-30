@@ -1,5 +1,14 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import { AuthProvider } from "./context/AuthContext";
+import PartnerPortalHome from "./features/partner-portal/pages/PartnerPortalHome";
+import PartnerPortalActivities from "./features/partner-portal/pages/PartnerPortalActivities";
+import PartnerPortalProducts from "./features/partner-portal/pages/PartnerPortalProducts";
+import PartnerPortalProductsAll from "./features/partner-portal/pages/PartnerPortalProductsAll";
+import PartnerPortalProductCreate from "./features/partner-portal/pages/PartnerPortalProductCreate";
+import PartnerPortalProductDetail from "./features/partner-portal/pages/PartnerPortalProductDetail";
+import PartnerPortalProfile from "./features/partner-portal/pages/PartnerPortalProfile";
+import PartnerPortalRequests from "./features/partner-portal/pages/PartnerPortalRequests";
+import { ROLE_ADMIN, ROLE_PARTNER } from "./lib/authRoles";
 import Activities from "./pages/Activities";
 import Dashboard from "./pages/Dashboard";
 import Login from "./pages/Login";
@@ -20,140 +29,81 @@ import Students from "./pages/Students";
 import ProtectedRoute from "./routes/ProtectedRoute";
 
 function App() {
+  const adminGuard = (node) => (
+    <ProtectedRoute allowedRoles={[ROLE_ADMIN]}>{node}</ProtectedRoute>
+  );
+
+  const partnerGuard = (node) => (
+    <ProtectedRoute allowedRoles={[ROLE_PARTNER]}>{node}</ProtectedRoute>
+  );
+
   return (
     <AuthProvider>
       <Routes>
         <Route path="/" element={<Login />} />
         <Route path="/login" element={<Login />} />
-        <Route
-          path="/dashboard"
-          element={
-            <ProtectedRoute>
-              <Dashboard />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/alunos"
-          element={
-            <ProtectedRoute>
-              <Students />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/alunos/novo"
-          element={
-            <ProtectedRoute>
-              <StudentCreate />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/alunos/:studentId"
-          element={
-            <ProtectedRoute>
-              <StudentDetail />
-            </ProtectedRoute>
-          }
-        />
+
+        <Route path="/dashboard" element={adminGuard(<Dashboard />)} />
+        <Route path="/alunos" element={adminGuard(<Students />)} />
+        <Route path="/alunos/novo" element={adminGuard(<StudentCreate />)} />
+        <Route path="/alunos/:studentId" element={adminGuard(<StudentDetail />)} />
         <Route
           path="/alunos/:studentId/transferir"
-          element={
-            <ProtectedRoute>
-              <StudentTransfer />
-            </ProtectedRoute>
-          }
+          element={adminGuard(<StudentTransfer />)}
         />
-        <Route
-          path="/parceiros"
-          element={
-            <ProtectedRoute>
-              <Partners />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/parceiros/novo"
-          element={
-            <ProtectedRoute>
-              <PartnerCreate />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/parceiros/:partnerId"
-          element={
-            <ProtectedRoute>
-              <PartnerDetail />
-            </ProtectedRoute>
-          }
-        />
+        <Route path="/parceiros" element={adminGuard(<Partners />)} />
+        <Route path="/parceiros/novo" element={adminGuard(<PartnerCreate />)} />
+        <Route path="/parceiros/:partnerId" element={adminGuard(<PartnerDetail />)} />
         <Route
           path="/parceiros/:partnerId/produtos"
-          element={
-            <ProtectedRoute>
-              <PartnerProducts />
-            </ProtectedRoute>
-          }
+          element={adminGuard(<PartnerProducts />)}
         />
         <Route
           path="/parceiros/:partnerId/produtos/novo"
-          element={
-            <ProtectedRoute>
-              <PartnerProductCreate />
-            </ProtectedRoute>
-          }
+          element={adminGuard(<PartnerProductCreate />)}
         />
         <Route
           path="/parceiros/:partnerId/produtos/:productId"
-          element={
-            <ProtectedRoute>
-              <PartnerProductDetail />
-            </ProtectedRoute>
-          }
+          element={adminGuard(<PartnerProductDetail />)}
+        />
+        <Route path="/produtos" element={adminGuard(<Products />)} />
+        <Route path="/produtos/novo" element={adminGuard(<ProductCreate />)} />
+        <Route path="/produtos/:productId" element={adminGuard(<ProductDetail />)} />
+        <Route path="/atividades" element={adminGuard(<Activities />)} />
+        <Route path="/perfil" element={adminGuard(<Profile />)} />
+
+        <Route path="/parceiro" element={<Navigate to="/portal-parceiro" replace />} />
+        <Route path="/portal-parceiro" element={partnerGuard(<PartnerPortalHome />)} />
+        <Route
+          path="/portal-parceiro/atividades"
+          element={partnerGuard(<PartnerPortalActivities />)}
         />
         <Route
-          path="/produtos"
-          element={
-            <ProtectedRoute>
-              <Products />
-            </ProtectedRoute>
-          }
+          path="/portal-parceiro/produtos"
+          element={partnerGuard(<PartnerPortalProducts />)}
         />
         <Route
-          path="/produtos/novo"
-          element={
-            <ProtectedRoute>
-              <ProductCreate />
-            </ProtectedRoute>
-          }
+          path="/portal-parceiro/produtos/todos"
+          element={partnerGuard(<PartnerPortalProductsAll />)}
         />
         <Route
-          path="/produtos/:productId"
-          element={
-            <ProtectedRoute>
-              <ProductDetail />
-            </ProtectedRoute>
-          }
+          path="/portal-parceiro/produtos/novo"
+          element={partnerGuard(<PartnerPortalProductCreate />)}
         />
         <Route
-          path="/atividades"
-          element={
-            <ProtectedRoute>
-              <Activities />
-            </ProtectedRoute>
-          }
+          path="/portal-parceiro/produtos/:productId"
+          element={partnerGuard(<PartnerPortalProductDetail />)}
         />
         <Route
-          path="/perfil"
-          element={
-            <ProtectedRoute>
-              <Profile />
-            </ProtectedRoute>
-          }
+          path="/portal-parceiro/meu-perfil"
+          element={partnerGuard(<PartnerPortalProfile />)}
         />
-        <Route path="*" element={<Navigate to="/" replace />} />
+        <Route
+          path="/portal-parceiro/solicitacoes"
+          element={partnerGuard(<PartnerPortalRequests />)}
+        />
+
+        <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
     </AuthProvider>
   );

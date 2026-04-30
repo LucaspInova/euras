@@ -768,6 +768,23 @@ body {
   padding: 0 2px 4px;
 }
 
+.profile-field input {
+  margin: 0;
+  min-height: 32px;
+  border: 0;
+  border-bottom: 1px solid #9a9a9a;
+  background: transparent;
+  color: #4f4f4f;
+  font-size: 1rem;
+  line-height: 1;
+  padding: 0 2px 4px;
+}
+
+.profile-field input:focus {
+  outline: none;
+  border-bottom-color: #6d5004;
+}
+
 .profile-password-row {
   position: relative;
 }
@@ -795,7 +812,28 @@ body {
 .profile-actions {
   display: flex;
   justify-content: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
   margin-top: 16px;
+}
+
+.profile-save-button {
+  min-width: 170px;
+  min-height: 48px;
+  border: 0;
+  border-radius: 8px;
+  background: #2f7d32;
+  color: #ffffff;
+  font-size: 0.95rem;
+  font-weight: 700;
+  box-shadow: 0 10px 24px rgba(91, 72, 25, 0.24);
+  cursor: pointer;
+  transition: transform 0.18s ease, background-color 0.18s ease;
+}
+
+.profile-save-button:hover {
+  transform: translateY(-1px);
+  background: #256928;
 }
 
 .profile-disconnect-button {
@@ -815,6 +853,12 @@ body {
 .profile-disconnect-button:hover {
   transform: translateY(-1px);
   background: #b92626;
+}
+
+.profile-save-button:disabled,
+.profile-disconnect-button:disabled {
+  opacity: 0.72;
+  cursor: not-allowed;
 }
 
 .profile-signout-backdrop {
@@ -1110,6 +1154,40 @@ body {
   padding: 28px 18px;
   color: #5d5d5d;
   font-size: 0.9rem;
+}
+
+.students-empty-state-with-action,
+.products-empty-state-with-action {
+  display: grid;
+  gap: 12px;
+  align-content: start;
+}
+
+.students-empty-state-with-action p,
+.products-empty-state-with-action p {
+  margin: 0;
+}
+
+.data-retry-button {
+  width: fit-content;
+  min-height: 34px;
+  border: 1px solid #c8b88b;
+  border-radius: 999px;
+  background: #f7f1df;
+  color: #2c2c2c;
+  font-size: 0.84rem;
+  font-weight: 700;
+  padding: 0 14px;
+  cursor: pointer;
+  transition: transform 0.18s ease, box-shadow 0.18s ease, background-color 0.18s ease;
+}
+
+.data-retry-button:hover,
+.data-retry-button:focus-visible {
+  background: #fff2cd;
+  box-shadow: 0 6px 16px rgba(73, 60, 24, 0.18);
+  transform: translateY(-1px);
+  outline: none;
 }
 
 .student-back-button {
@@ -2009,18 +2087,43 @@ body {
 }
 
 .partner-products-link {
-  border: 0;
-  background: transparent;
-  color: #d6a100;
-  font-size: 2.2rem;
+  border: 1px solid #bf8d00;
+  background: linear-gradient(180deg, #f2ca59 0%, #d8a00b 100%);
+  color: #1f1b10;
+  font-size: 1.18rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  min-height: 50px;
+  border-radius: 999px;
+  padding: 0 10px 0 20px;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 12px;
+  box-shadow: 0 10px 20px rgba(99, 73, 8, 0.26);
+  transition: transform 0.18s ease, box-shadow 0.18s ease, filter 0.18s ease;
 }
 
-.partner-products-link span {
-  font-size: 1.3rem;
+.partner-products-link:hover,
+.partner-products-link:focus-visible {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 26px rgba(99, 73, 8, 0.3);
+  filter: brightness(1.02);
+  outline: none;
+}
+
+.partner-products-link-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.24);
+  display: inline-grid;
+  place-items: center;
+}
+
+.partner-products-link-icon svg {
+  width: 18px;
+  height: 18px;
 }
 
 .partner-products-page {
@@ -2495,9 +2598,9 @@ body {
 
 .products-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 170px));
+  grid-template-columns: repeat(4, minmax(0, 160px));
   gap: 22px;
-  max-width: 760px;
+  max-width: 720px;
 }
 
 .products-card {
@@ -2508,7 +2611,7 @@ body {
 
 .products-card-logo {
   width: 100%;
-  min-height: 150px;
+  min-height: 162px;
   border-radius: 8px;
   background: #f0f0f0;
   border: 1px solid #cbc4b0;
@@ -2535,7 +2638,7 @@ body {
 
 .products-card-image {
   width: 100%;
-  height: 150px;
+  height: 162px;
   object-fit: cover;
   border-radius: 8px;
 }

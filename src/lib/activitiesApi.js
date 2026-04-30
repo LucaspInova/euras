@@ -198,25 +198,29 @@ async function listActivitiesFromLegacyEntries() {
 
 export function getActivitiesApiErrorMessage(error) {
   const message = error?.message ?? ''
+  const normalizedMessage = message
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
+    .toLowerCase()
 
   if (!message) {
-    return 'Nao foi possivel carregar as atividades do banco.'
+    return 'Não foi possível carregar as atividades do banco.'
   }
 
-  if (message.toLowerCase().includes('tempo limite')) {
-    return 'Conexao com o banco demorou demais. Tente novamente em instantes.'
+  if (normalizedMessage.includes('tempo limite')) {
+    return 'Conexão com o banco demorou demais. Tente novamente em instantes.'
   }
 
-  if (message.toLowerCase().includes('sessao expirada')) {
-    return 'Sua sessao expirou. Faca login novamente.'
+  if (normalizedMessage.includes('sessao expirada')) {
+    return 'Sua sessão expirou. Faça login novamente.'
   }
 
-  if (message.toLowerCase().includes('infinite recursion detected in policy')) {
-    return 'Erro de permissao no banco (RLS). Rode o script de correcao de policies e tente novamente.'
+  if (normalizedMessage.includes('infinite recursion detected in policy')) {
+    return 'Erro de permissão no banco (RLS). Rode o script de correção de policies e tente novamente.'
   }
 
-  if (message.toLowerCase().includes('row-level security')) {
-    return 'Operacao bloqueada por permissao (RLS). Verifique se seu usuario e admin.'
+  if (normalizedMessage.includes('row-level security')) {
+    return 'Operação bloqueada por permissão (RLS). Verifique se seu usuário é admin.'
   }
 
   return message

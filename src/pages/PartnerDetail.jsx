@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Navigate, useNavigate, useParams } from 'react-router-dom'
 import SidebarLayout from '../components/SidebarLayout'
-import { getPartnerApiErrorMessage, getPartnerById, removePartner, updatePartner } from '../lib/partnersApi'
+import { getPartnerApiErrorMessage, getPartnerById, prefetchPartnerProducts, removePartner, updatePartner } from '../lib/partnersApi'
 
 function BackIcon() {
   return (
@@ -23,6 +23,15 @@ function RemoveIcon() {
     <svg viewBox="0 0 24 24" aria-hidden="true">
       <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" strokeWidth="2" />
       <path d="M8 8l8 8M16 8l-8 8" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+function ForwardIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M5 12h13" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+      <path d="m13 6 6 6-6 6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   )
 }
@@ -60,7 +69,7 @@ function fileToDataUrl(file) {
     const reader = new FileReader()
 
     reader.onload = () => resolve(String(reader.result ?? ''))
-    reader.onerror = () => reject(new Error('Nao foi possivel processar a imagem selecionada.'))
+    reader.onerror = () => reject(new Error('Não foi possível processar a imagem selecionada.'))
 
     reader.readAsDataURL(file)
   })
@@ -219,6 +228,14 @@ export default function PartnerDetail() {
     }
   }
 
+  const handleOpenPartnerProducts = () => {
+    navigate(`/parceiros/${partnerId}/produtos`)
+  }
+
+  const handlePrefetchPartnerProducts = () => {
+    prefetchPartnerProducts(partnerId).catch(() => {})
+  }
+
   return (
     <SidebarLayout>
       <section className="partner-create-page">
@@ -244,17 +261,17 @@ export default function PartnerDetail() {
               <div className="partner-create-grid">
                 <div className="partner-create-column">
                   <label className="partner-field">
-                    <span>Nome da instituicao:</span>
+                    <span>Nome da instituição:</span>
                     <input type="text" value={form.institution} onChange={handleFieldChange('institution')} />
                   </label>
 
                   <label className="partner-field">
-                    <span>Usuario:</span>
+                    <span>Usuário:</span>
                     <input type="text" value={form.user} onChange={handleFieldChange('user')} />
                   </label>
 
                   <label className="partner-field">
-                    <span>Numero:</span>
+                    <span>Número:</span>
                     <input type="text" value={form.phone} onChange={handleFieldChange('phone')} />
                   </label>
 
@@ -285,7 +302,7 @@ export default function PartnerDetail() {
                   </div>
 
                   <div className="partner-hours-box">
-                    <h2>Horario de funcionamento:</h2>
+                    <h2>Horário de funcionamento:</h2>
 
                     {rows.map((row) => {
                       const item = form.schedule[row.key]
@@ -335,10 +352,15 @@ export default function PartnerDetail() {
                 <button
                   type="button"
                   className="partner-products-link"
-                  onClick={() => navigate(`/parceiros/${partnerId}/produtos`)}
+                  onClick={handleOpenPartnerProducts}
+                  onMouseEnter={handlePrefetchPartnerProducts}
+                  onFocus={handlePrefetchPartnerProducts}
+                  onTouchStart={handlePrefetchPartnerProducts}
                 >
-                  Ver produtos
-                  <span aria-hidden="true">-&gt;</span>
+                  <span>Ver produtos</span>
+                  <span className="partner-products-link-icon" aria-hidden="true">
+                    <ForwardIcon />
+                  </span>
                 </button>
               </div>
             </section>

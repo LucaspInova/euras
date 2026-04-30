@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from 'react'
+﻿import { useEffect, useMemo, useState } from 'react'
 import { Navigate, useNavigate, useParams } from 'react-router-dom'
 import SidebarLayout from '../components/SidebarLayout'
 import { getPartnerApiErrorMessage, listPartnerProducts } from '../lib/partnersApi'
+import { runWithRetries, withRequestTimeout } from '../lib/requestGuards'
 
 function SearchIcon() {
   return (
@@ -37,6 +38,14 @@ function normalize(text) {
   return text.normalize('NFD').replace(/\p{Diacritic}/gu, '').toUpperCase()
 }
 
+function buildPreviewPartnerProducts(sourceProducts) {
+  if (!Array.isArray(sourceProducts)) {
+    return []
+  }
+
+  return sourceProducts
+}
+
 export default function PartnerProducts() {
   const navigate = useNavigate()
   const { partnerId } = useParams()
@@ -45,6 +54,7 @@ export default function PartnerProducts() {
   const [products, setProducts] = useState([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
+  const [reloadNonce, setReloadNonce] = useState(0)
 
   useEffect(() => {
     let active = true
@@ -54,7 +64,13 @@ export default function PartnerProducts() {
       setLoadError('')
 
       try {
-        const { partner: partnerData, products: productData } = await listPartnerProducts(partnerId)
+        const { partner: partnerData, products: productData } = await runWithRetries(
+          () =>
+            withRequestTimeout(listPartnerProducts(partnerId), {
+              message: 'Tempo limite ao carregar produtos deste parceiro. Tente novamente.',
+            }),
+          { attempts: 2 },
+        )
         if (!active) return
 
         setPartner(partnerData)
@@ -75,17 +91,19 @@ export default function PartnerProducts() {
     return () => {
       active = false
     }
-  }, [partnerId])
+  }, [partnerId, reloadNonce])
+
+  const previewProducts = useMemo(() => buildPreviewPartnerProducts(products), [products])
 
   const filteredProducts = useMemo(() => {
     const search = normalize(searchTerm.trim())
 
     if (!search) {
-      return products
+      return previewProducts
     }
 
-    return products.filter((product) => normalize(product.name).includes(search))
-  }, [products, searchTerm])
+    return previewProducts.filter((product) => normalize(product.name).includes(search))
+  }, [previewProducts, searchTerm])
 
   if (!loading && !loadError && !partner) {
     return <Navigate to="/parceiros" replace />
@@ -118,7 +136,14 @@ export default function PartnerProducts() {
         </div>
 
         {loading ? <div className="students-empty-state">Carregando produtos...</div> : null}
-        {loadError ? <div className="students-empty-state">{loadError}</div> : null}
+        {loadError && !loading ? (
+          <div className="students-empty-state students-empty-state-with-action">
+            <p>{loadError}</p>
+            <button type="button" className="data-retry-button" onClick={() => setReloadNonce((current) => current + 1)}>
+              Tentar novamente
+            </button>
+          </div>
+        ) : null}
 
         {!loading && !loadError && partner ? (
           <section className="partners-group">
@@ -130,10 +155,16 @@ export default function PartnerProducts() {
                   <button
                     type="button"
                     className="product-card-logo product-card-link"
-                    onClick={() => navigate(`/parceiros/${partnerId}/produtos/${product.id}`)}
+                    onClick={() => navigate(`/parceiros/${partnerId}/produtos/${product.sourceId ?? product.id}`)}
                   >
                     {product.imageUrl ? (
-                      <img src={product.imageUrl} alt={product.name} className="product-card-image" loading="lazy" />
+                      <img
+                        src={product.imageUrl}
+                        alt={product.name}
+                        className="product-card-image"
+                        loading="lazy"
+                        decoding="async"
+                      />
                     ) : (
                       <ProductIcon />
                     )}
@@ -159,3 +190,4 @@ export default function PartnerProducts() {
     </SidebarLayout>
   )
 }
+

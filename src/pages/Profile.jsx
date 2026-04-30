@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import SidebarLayout from '../components/SidebarLayout'
 import { useAuth } from '../context/AuthContext'
@@ -34,17 +34,29 @@ function CloseIcon() {
 
 export default function Profile() {
   const navigate = useNavigate()
-  const { user, signOut } = useAuth()
+  const { user, profile, updateProfile, signOut } = useAuth()
   const [showSignOutModal, setShowSignOutModal] = useState(false)
   const [isSigningOut, setIsSigningOut] = useState(false)
+  const [nameValue, setNameValue] = useState('')
+  const [phoneValue, setPhoneValue] = useState('')
+  const [saveError, setSaveError] = useState('')
+  const [saveSuccess, setSaveSuccess] = useState('')
+  const [isSavingProfile, setIsSavingProfile] = useState(false)
 
-  const userName =
-    user?.user_metadata?.full_name?.trim() ||
-    user?.user_metadata?.name?.trim() ||
-    user?.user_metadata?.display_name?.trim() ||
-    'Eula Paula Rocha'
-  const userEmail = user?.email ?? 'admin123@test.com'
-  const userPhone = user?.phone || '(00) 00000-0000'
+  const userEmail = profile?.email?.trim() || user?.email || 'admin123@test.com'
+
+  useEffect(() => {
+    const defaultName =
+      profile?.nome_completo?.trim() ||
+      user?.user_metadata?.full_name?.trim() ||
+      user?.user_metadata?.name?.trim() ||
+      user?.user_metadata?.display_name?.trim() ||
+      'Eula Paula Rocha'
+    const defaultPhone = profile?.telefone?.trim() || user?.phone || '(00) 00000-0000'
+
+    setNameValue(defaultName)
+    setPhoneValue(defaultPhone)
+  }, [profile, user])
 
   const openSignOutModal = () => {
     setShowSignOutModal(true)
@@ -71,7 +83,7 @@ export default function Profile() {
       const { error } = await signOut()
 
       if (error) {
-        console.error('Falha ao encerrar sessao no Supabase.', {
+        console.error('Falha ao encerrar sessão no Supabase.', {
           message: error.message,
           status: error.status,
           code: error.code,
@@ -79,7 +91,38 @@ export default function Profile() {
         })
       }
     } catch (error) {
-      console.error('Erro inesperado ao encerrar sessao.', error)
+      console.error('Erro inesperado ao encerrar sessão.', error)
+    }
+  }
+
+  const handleSaveProfile = async () => {
+    if (isSavingProfile) {
+      return
+    }
+
+    setSaveError('')
+    setSaveSuccess('')
+
+    if (!nameValue.trim()) {
+      setSaveError('Informe o nome de usuário.')
+      return
+    }
+
+    setIsSavingProfile(true)
+
+    try {
+      const updatedProfile = await updateProfile({
+        name: nameValue.trim(),
+        phone: phoneValue,
+      })
+
+      setNameValue(updatedProfile?.nome_completo?.trim() || nameValue.trim())
+      setPhoneValue(updatedProfile?.telefone?.trim() || '')
+      setSaveSuccess('Perfil atualizado com sucesso.')
+    } catch (error) {
+      setSaveError(error?.message ?? 'Não foi possível atualizar seu perfil.')
+    } finally {
+      setIsSavingProfile(false)
     }
   }
 
@@ -90,10 +133,10 @@ export default function Profile() {
           <div className="profile-card-coin" aria-hidden="true" />
 
           <div className="profile-fields">
-            <div className="profile-field">
-              <span>Nome do usuario:</span>
-              <p>{userName}</p>
-            </div>
+            <label className="profile-field">
+              <span>Nome de usuário:</span>
+              <input type="text" value={nameValue} onChange={(event) => setNameValue(event.target.value)} />
+            </label>
 
             <div className="profile-field">
               <span>E-mail:</span>
@@ -110,26 +153,37 @@ export default function Profile() {
               </div>
             </div>
 
-            <div className="profile-field">
-              <span>Numero:</span>
-              <p>{userPhone}</p>
-            </div>
+            <label className="profile-field">
+              <span>Número:</span>
+              <input type="text" value={phoneValue} onChange={(event) => setPhoneValue(event.target.value)} />
+            </label>
           </div>
 
           <div className="profile-actions">
-            <button type="button" className="profile-disconnect-button" onClick={openSignOutModal}>
+            <button
+              type="button"
+              className="profile-save-button"
+              onClick={handleSaveProfile}
+              disabled={isSavingProfile || isSigningOut}
+            >
+              {isSavingProfile ? 'Salvando...' : 'Salvar alterações'}
+            </button>
+            <button type="button" className="profile-disconnect-button" onClick={openSignOutModal} disabled={isSigningOut}>
               Desconectar
             </button>
           </div>
+
+          {saveSuccess ? <p className="form-message">{saveSuccess}</p> : null}
+          {saveError ? <p className="form-message form-message-error">{saveError}</p> : null}
         </article>
 
         {showSignOutModal ? (
           <div className="profile-signout-backdrop" role="presentation">
-            <div className="profile-signout-modal" role="dialog" aria-modal="true" aria-label="Confirmar saida">
+            <div className="profile-signout-modal" role="dialog" aria-modal="true" aria-label="Confirmar saída">
               <button
                 type="button"
                 className="profile-signout-close"
-                aria-label="Fechar confirmacao de saida"
+                aria-label="Fechar confirmação de saída"
                 onClick={closeSignOutModal}
               >
                 <CloseIcon />

@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
 const SUPABASE_REQUEST_TIMEOUT_MS = 30000
+const SUPABASE_AUTH_TIMEOUT_MS = 32000
 let refreshSessionPromise = null
 
 function isTransientSupabaseError(error) {
@@ -11,8 +12,24 @@ function isTransientSupabaseError(error) {
     message.includes('tempo limite') ||
     message.includes('failed to fetch') ||
     message.includes('network') ||
-    message.includes('connection')
+    message.includes('connection') ||
+    message.includes('abort')
   )
+}
+
+async function withOperationTimeout(operationPromise, timeoutMessage, timeoutMs = SUPABASE_AUTH_TIMEOUT_MS) {
+  let timeoutId = null
+  const timeoutPromise = new Promise((_, reject) => {
+    timeoutId = setTimeout(() => reject(new Error(timeoutMessage)), timeoutMs)
+  })
+
+  try {
+    return await Promise.race([operationPromise, timeoutPromise])
+  } finally {
+    if (timeoutId !== null) {
+      clearTimeout(timeoutId)
+    }
+  }
 }
 
 function clearPersistedAuthTokens() {
@@ -49,7 +66,7 @@ async function fetchWithTimeout(input, init = {}) {
     })
   } catch (error) {
     if (error?.name === 'AbortError') {
-      throw new Error('Tempo limite de conexao com o Supabase excedido.')
+      throw new Error('Tempo limite de conexão com o Supabase excedido.')
     }
 
     throw error
@@ -64,21 +81,22 @@ if (!supabaseUrl || !supabaseAnonKey) {
   )
 }
 
-clearPersistedAuthTokens()
-
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   global: {
     fetch: fetchWithTimeout,
   },
   auth: {
-    persistSession: false,
+    persistSession: true,
     autoRefreshToken: true,
     detectSessionInUrl: true,
   },
 })
 
 export async function ensureFreshSession({ minimumValiditySeconds = 90 } = {}) {
-  const { data, error } = await supabase.auth.getSession()
+  const { data, error } = await withOperationTimeout(
+    supabase.auth.getSession(),
+    'Tempo limite ao validar a sessão com o Supabase.',
+  )
 
   if (error) {
     throw error
@@ -86,7 +104,7 @@ export async function ensureFreshSession({ minimumValiditySeconds = 90 } = {}) {
 
   const currentSession = data.session
   if (!currentSession) {
-    throw new Error('Sessao expirada. Faca login novamente.')
+    throw new Error('Sessão expirada. Faça login novamente.')
   }
 
   const expiresAt = Number(currentSession.expires_at ?? 0)
@@ -99,7 +117,10 @@ export async function ensureFreshSession({ minimumValiditySeconds = 90 } = {}) {
   if (!refreshSessionPromise) {
     refreshSessionPromise = (async () => {
       for (let attempt = 0; attempt < 2; attempt += 1) {
-        const { data: refreshedData, error: refreshError } = await supabase.auth.refreshSession()
+        const { data: refreshedData, error: refreshError } = await withOperationTimeout(
+          supabase.auth.refreshSession(),
+          'Tempo limite ao renovar a sessão com o Supabase.',
+        )
 
         if (refreshError) {
           if (attempt === 0 && isTransientSupabaseError(refreshError)) {
@@ -113,7 +134,7 @@ export async function ensureFreshSession({ minimumValiditySeconds = 90 } = {}) {
         }
       }
 
-      throw new Error('Nao foi possivel renovar a sessao atual.')
+      throw new Error('Não foi possível renovar a sessão atual.')
     })().finally(() => {
       refreshSessionPromise = null
     })

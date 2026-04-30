@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { getHomePathByRole, isSupportedRole } from "../lib/authRoles";
 
 function EyeIcon({ visible }) {
   if (visible) {
@@ -46,7 +47,7 @@ function EyeIcon({ visible }) {
 
 export default function Login() {
   const navigate = useNavigate();
-  const { user, loading, signInWithPassword } = useAuth();
+  const { user, role, loading, profileLoading, authError, signInWithPassword, signInWithGoogle } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -54,10 +55,19 @@ export default function Login() {
   const [formError, setFormError] = useState("");
 
   useEffect(() => {
-    if (!loading && user) {
-      navigate("/dashboard", { replace: true });
+    if (!loading && !profileLoading && user && isSupportedRole(role)) {
+      navigate(getHomePathByRole(role), { replace: true });
     }
-  }, [user, loading, navigate]);
+  }, [user, role, loading, profileLoading, navigate]);
+
+  const roleAccessError =
+    !loading && !profileLoading && user && !authError && role && !isSupportedRole(role)
+      ? "Seu usuário não possui permissão para acessar este painel."
+      : "";
+  const profileError =
+    !loading && !profileLoading && user && authError
+      ? authError
+      : "";
 
   const handleNoAction = (event) => {
     event.preventDefault();
@@ -75,7 +85,7 @@ export default function Login() {
     setIsLoading(true);
 
     const { error } = await signInWithPassword({
-      email,
+      email: email.trim(),
       password,
     });
 
@@ -89,11 +99,43 @@ export default function Login() {
         return;
       }
 
-      setFormError("Nao foi possivel fazer login agora.");
+      if (rawMessage.includes("email not confirmed")) {
+        setFormError("Seu e-mail ainda não foi confirmado. Confirme o e-mail para concluir o login.");
+        return;
+      }
+
+      if (rawMessage.includes("email not verified")) {
+        setFormError("Seu e-mail ainda não foi verificado. Verifique sua caixa de entrada.");
+        return;
+      }
+
+      if (rawMessage.includes("too many requests")) {
+        setFormError("Muitas tentativas de login. Aguarde um instante e tente novamente.");
+        return;
+      }
+
+      if (error.message) {
+        setFormError(error.message);
+        return;
+      }
+
+      setFormError("Não foi possível fazer login agora.");
       return;
     }
 
-    navigate("/dashboard", { replace: true });
+  };
+
+  const handleGoogleLogin = async () => {
+    setFormError("");
+    setIsLoading(true);
+
+    const { error } = await signInWithGoogle();
+
+    setIsLoading(false);
+
+    if (error) {
+      setFormError(error.message || "Não foi possível iniciar o login com Google.");
+    }
   };
 
   return (
@@ -140,8 +182,10 @@ export default function Login() {
             </button>
           </div>
 
-          {formError && (
-            <p className="form-message form-message-error">{formError}</p>
+          {(formError || profileError || roleAccessError) && (
+            <p className="form-message form-message-error">
+              {formError || profileError || roleAccessError}
+            </p>
           )}
 
           <button className="primary-button" type="submit" disabled={isLoading}>
@@ -153,7 +197,8 @@ export default function Login() {
           <button
             className="secondary-button"
             type="button"
-            onClick={handleNoAction}
+            onClick={handleGoogleLogin}
+            disabled={isLoading}
           >
             <span aria-hidden="true" className="google-mark">
               G

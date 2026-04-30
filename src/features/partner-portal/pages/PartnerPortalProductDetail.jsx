@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Navigate, useNavigate, useParams } from 'react-router-dom'
-import SidebarLayout from '../components/SidebarLayout'
-import { buildOptimizedImageDataUrl } from '../lib/imageUpload'
+import { useAuth } from '../../../context/AuthContext'
+import { supabase } from '../../../lib/supabase'
+import PartnerPortalLayout from '../components/PartnerPortalLayout'
 import {
-  getPartnerApiErrorMessage,
-  getProductById,
-  removeProduct,
-  updateProduct,
-} from '../lib/partnersApi'
+  atualizarProduto,
+  fetchParceiro,
+  fetchProdutos,
+  getParceiroDataErrorMessage,
+} from '../hooks/useParceiroData'
 
 function BackIcon() {
   return (
@@ -58,9 +59,40 @@ function formatPrice(value) {
   return numeric.toFixed(2).replace('.', ',')
 }
 
+function parseEurasValue(value) {
+  if (typeof value === 'number') {
+    return value
+  }
+
+  const raw = String(value ?? '').trim().replace(/\s+/g, '')
+  if (!raw) return Number.NaN
+
+  let normalized = raw
+
+  if (raw.includes(',') && raw.includes('.')) {
+    normalized = raw.replace(/\./g, '').replace(',', '.')
+  } else if (raw.includes(',')) {
+    normalized = raw.replace(',', '.')
+  }
+
+  return Number(normalized)
+}
+
+function mapProduto(row, institution) {
+  return {
+    id: row.id,
+    title: row.titulo ?? '',
+    description: row.descricao ?? '',
+    priceEuras: Number(row.preco_euras ?? 0),
+    imageUrl: row.url_imagem ?? '',
+    active: row.ativo ?? true,
+    institution,
+  }
+}
+
 function mapProductToForm(product) {
   return {
-    name: product.name ?? '',
+    name: product.title ?? '',
     institution: product.institution ?? '',
     value: formatPrice(product.priceEuras),
     description: product.description ?? '',
@@ -68,9 +100,10 @@ function mapProductToForm(product) {
   }
 }
 
-export default function ProductDetail() {
+export default function PartnerPortalProductDetail() {
   const navigate = useNavigate()
   const { productId } = useParams()
+  const { profile } = useAuth()
   const fileInputRef = useRef(null)
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
@@ -81,6 +114,8 @@ export default function ProductDetail() {
   const [form, setForm] = useState(null)
   const [initialForm, setInitialForm] = useState(null)
 
+  const partnerProfileId = profile?.id ?? null
+
   useEffect(() => {
     let active = true
 
@@ -89,21 +124,34 @@ export default function ProductDetail() {
       setLoadError('')
 
       try {
-        const product = await getProductById(productId)
+        const [produtosResponse, parceiroResponse] = await Promise.all([
+          fetchProdutos(supabase),
+          fetchParceiro(supabase),
+        ])
+
+        if (produtosResponse.error) throw produtosResponse.error
+        if (parceiroResponse.error) throw parceiroResponse.error
+
+        const institution = parceiroResponse.data?.nome_instituicao?.trim() || 'Parceiro'
+        const productRow = (produtosResponse.data ?? []).find(
+          (item) => item.id === productId && item.ativo !== false,
+        )
+
         if (!active) return
 
-        if (!product) {
+        if (!productRow) {
           setForm(null)
           setInitialForm(null)
           return
         }
 
+        const product = mapProduto(productRow, institution)
         const mapped = mapProductToForm(product)
         setForm(mapped)
         setInitialForm(mapped)
       } catch (error) {
         if (!active) return
-        setLoadError(getPartnerApiErrorMessage(error))
+        setLoadError(getParceiroDataErrorMessage(error))
       } finally {
         if (active) {
           setLoading(false)
@@ -116,7 +164,7 @@ export default function ProductDetail() {
     return () => {
       active = false
     }
-  }, [productId])
+  }, [partnerProfileId, productId])
 
   const handleFieldChange = (field) => (event) => {
     setForm((current) => ({ ...current, [field]: event.target.value }))
@@ -128,7 +176,6 @@ export default function ProductDetail() {
 
   const handleImageChange = async (event) => {
     const file = event.target.files?.[0]
-    event.target.value = ''
 
     if (!file) {
       return
@@ -136,16 +183,16 @@ export default function ProductDetail() {
 
     if (!file.type.startsWith('image/')) {
       setFormError('Selecione um arquivo de imagem válido.')
+      event.target.value = ''
       return
     }
 
-    try {
-      const optimizedImageDataUrl = await buildOptimizedImageDataUrl(file)
-      setForm((current) => ({ ...current, imageUrl: optimizedImageDataUrl }))
-      setFormError('')
-    } catch (error) {
-      setFormError(error?.message ?? 'Não foi possível carregar essa imagem.')
-    }
+    setFormError('')
+
+    const objectUrl = URL.createObjectURL(file)
+    setForm((current) => ({ ...current, imageUrl: objectUrl }))
+
+    event.target.value = ''
   }
 
   const hasChanges = useMemo(() => {
@@ -155,7 +202,6 @@ export default function ProductDetail() {
 
     return (
       form.name.trim() !== initialForm.name.trim() ||
-      form.institution.trim() !== initialForm.institution.trim() ||
       form.value.trim() !== initialForm.value.trim() ||
       form.description.trim() !== initialForm.description.trim() ||
       form.imageUrl !== initialForm.imageUrl
@@ -163,7 +209,7 @@ export default function ProductDetail() {
   }, [form, initialForm])
 
   if (!loading && !loadError && !form) {
-    return <Navigate to="/produtos" replace />
+    return <Navigate to="/portal-parceiro/produtos" replace />
   }
 
   const handleSubmit = async (event) => {
@@ -177,11 +223,6 @@ export default function ProductDetail() {
       return
     }
 
-    if (!form.institution.trim()) {
-      setFormError('Informe a instituição do produto.')
-      return
-    }
-
     if (!form.value.trim()) {
       setFormError('Informe o valor do produto.')
       return
@@ -190,17 +231,35 @@ export default function ProductDetail() {
     setIsSaving(true)
 
     try {
-      await updateProduct(productId, {
-        name: form.name.trim(),
-        institution: form.institution.trim(),
-        description: form.description.trim(),
-        priceEuras: form.value.trim(),
-        imageUrl: form.imageUrl,
-      })
+      const parsedPrice = parseEurasValue(form.value.trim())
+      if (!Number.isFinite(parsedPrice) || parsedPrice < 0) {
+        throw new Error('Informe um valor válido para o produto.')
+      }
 
-      const refreshed = await getProductById(productId)
+      const { error } = await atualizarProduto(supabase, productId, {
+        titulo: form.name.trim(),
+        descricao: form.description.trim(),
+        preco_euras: parsedPrice,
+        url_imagem: form.imageUrl,
+      })
+      if (error) throw error
+
+      const [produtosResponse, parceiroResponse] = await Promise.all([
+        fetchProdutos(supabase),
+        fetchParceiro(supabase),
+      ])
+
+      if (produtosResponse.error) throw produtosResponse.error
+      if (parceiroResponse.error) throw parceiroResponse.error
+
+      const institution = parceiroResponse.data?.nome_instituicao?.trim() || 'Parceiro'
+      const refreshedRow = (produtosResponse.data ?? []).find(
+        (item) => item.id === productId && item.ativo !== false,
+      )
+      const refreshed = refreshedRow ? mapProduto(refreshedRow, institution) : null
+
       if (!refreshed) {
-        navigate('/produtos', { replace: true, state: { resetFilters: true } })
+        navigate('/portal-parceiro/produtos', { replace: true })
         return
       }
 
@@ -208,7 +267,7 @@ export default function ProductDetail() {
       setForm(mapped)
       setInitialForm(mapped)
     } catch (error) {
-      setFormError(getPartnerApiErrorMessage(error))
+      setFormError(getParceiroDataErrorMessage(error))
     } finally {
       setIsSaving(false)
     }
@@ -219,26 +278,28 @@ export default function ProductDetail() {
     setIsRemoving(true)
 
     try {
-      await removeProduct(productId)
-      navigate('/produtos', { replace: true, state: { resetFilters: true } })
+      const { error } = await atualizarProduto(supabase, productId, { ativo: false })
+      if (error) throw error
+
+      navigate('/portal-parceiro/produtos', { replace: true })
     } catch (error) {
-      setFormError(getPartnerApiErrorMessage(error))
+      setFormError(getParceiroDataErrorMessage(error))
       setIsRemoving(false)
       setShowRemoveModal(false)
     }
   }
 
   return (
-    <SidebarLayout>
-      <section className="product-create-page product-control-page">
-        <div className="student-create-header">
-          <h1 className="partners-heading">Controle produto</h1>
+    <PartnerPortalLayout>
+      <section className="portal-product-editor-page">
+        <div className="portal-product-editor-header">
+          <h1>Controle produto</h1>
 
           <button
             type="button"
-            className="student-back-button product-create-back"
+            className="portal-product-back-button"
             aria-label="Voltar para produtos"
-            onClick={() => navigate('/produtos')}
+            onClick={() => navigate('/portal-parceiro/produtos')}
           >
             <BackIcon />
           </button>
@@ -249,35 +310,35 @@ export default function ProductDetail() {
         {formError ? <p className="form-message form-message-error">{formError}</p> : null}
 
         {!loading && !loadError && form ? (
-          <form className="product-create-form" onSubmit={handleSubmit}>
-            <section className="product-create-card">
-              <div className="product-create-grid">
-                <div className="product-create-column">
-                  <label className="product-create-field">
+          <form className="portal-product-editor-form" onSubmit={handleSubmit}>
+            <article className="portal-product-editor-card">
+              <div className="portal-product-editor-grid">
+                <div className="portal-product-editor-main">
+                  <label className="portal-product-field">
                     <span>Produto:</span>
                     <input type="text" value={form.name} onChange={handleFieldChange('name')} />
                   </label>
 
-                  <label className="product-create-field">
+                  <label className="portal-product-field">
                     <span>Instituição:</span>
-                    <input type="text" value={form.institution} onChange={handleFieldChange('institution')} />
+                    <input type="text" value={form.institution} disabled />
                   </label>
 
-                  <div className="product-create-value-block">
+                  <div className="portal-product-value-block">
                     <span>Valor:</span>
-                    <label className="product-create-value-row">
-                      <strong className="product-create-symbol">&lt;</strong>
+                    <label className="portal-product-value-row">
+                      <strong className="portal-product-value-symbol">&lt;</strong>
                       <input type="text" value={form.value} onChange={handleFieldChange('value')} />
                     </label>
                   </div>
                 </div>
 
-                <div className="product-create-column product-create-column-side">
-                  <div className="product-photo-box">
+                <div className="portal-product-editor-side">
+                  <div className="portal-product-photo-box">
                     <span>Adicionar foto:</span>
-                    <button type="button" className="product-photo-button" onClick={handleChooseImage}>
+                    <button type="button" className="portal-product-photo-button" onClick={handleChooseImage}>
                       {form.imageUrl ? (
-                        <img src={form.imageUrl} alt="Preview do produto" className="product-photo-preview" />
+                        <img src={form.imageUrl} alt="Preview do produto" className="portal-product-photo-preview" />
                       ) : (
                         <ProductPhotoIcon />
                       )}
@@ -286,40 +347,40 @@ export default function ProductDetail() {
                       ref={fileInputRef}
                       type="file"
                       accept="image/*"
-                      className="product-photo-input"
+                      className="portal-product-photo-input"
                       onChange={handleImageChange}
                     />
                   </div>
 
-                  <label className="product-create-textarea-field">
+                  <label className="portal-product-textarea-field">
                     <span>Descrição (opcional):</span>
                     <textarea value={form.description} onChange={handleFieldChange('description')} />
                   </label>
                 </div>
               </div>
-            </section>
+            </article>
 
-            <div className="product-control-actions">
+            <div className="portal-product-editor-actions portal-product-editor-actions-split">
               {hasChanges ? (
                 <button
                   type="submit"
-                  className="product-create-submit-button product-control-confirm-button"
+                  className="portal-product-primary-button portal-product-confirm-button"
                   disabled={isSaving || isRemoving}
                 >
                   {isSaving ? 'Salvando...' : 'Confirmar alterações'}
                 </button>
               ) : (
-                <span className="product-control-actions-spacer" aria-hidden="true"></span>
+                <span className="portal-product-actions-spacer" aria-hidden="true"></span>
               )}
 
               <button
                 type="button"
-                className="product-control-remove-button"
+                className="portal-product-remove-button"
                 onClick={() => setShowRemoveModal(true)}
                 disabled={isRemoving || isSaving}
               >
                 <span>Remover produto</span>
-                <span className="product-control-remove-icon">
+                <span className="portal-product-remove-icon">
                   <RemoveIcon />
                 </span>
               </button>
@@ -328,11 +389,11 @@ export default function ProductDetail() {
         ) : null}
 
         {showRemoveModal ? (
-          <div className="product-remove-modal-backdrop" role="presentation">
-            <div className="product-remove-modal" role="dialog" aria-modal="true" aria-label="Remover produto">
+          <div className="portal-product-remove-backdrop" role="presentation">
+            <div className="portal-product-remove-modal" role="dialog" aria-modal="true" aria-label="Remover produto">
               <button
                 type="button"
-                className="product-remove-modal-close"
+                className="portal-product-remove-close"
                 aria-label="Fechar modal de remoção"
                 onClick={() => setShowRemoveModal(false)}
               >
@@ -343,7 +404,7 @@ export default function ProductDetail() {
 
               <button
                 type="button"
-                className="product-remove-modal-confirm"
+                className="portal-product-remove-confirm"
                 onClick={handleRemove}
                 disabled={isRemoving}
               >
@@ -353,6 +414,6 @@ export default function ProductDetail() {
           </div>
         ) : null}
       </section>
-    </SidebarLayout>
+    </PartnerPortalLayout>
   )
 }

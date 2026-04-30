@@ -201,7 +201,7 @@ async function resolveCreatorProfileId(createdByAuthUserId) {
     throw authLookupError
   }
 
-  if (profileByAuth?.id) {
+  if (profileByAutha.id) {
     return profileByAuth.id
   }
 
@@ -243,33 +243,37 @@ async function insertLegacyCreditIfPresent({ studentId, amountInCents, createdBy
 
 export function getStudentApiErrorMessage(error) {
   const message = error?.message ?? ''
+  const normalizedMessage = message
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
+    .toLowerCase()
 
   if (!message) {
-    return 'Nao foi possivel concluir a operacao no banco de alunos.'
+    return 'Não foi possível concluir a operação no banco de alunos.'
   }
 
-  if (message.toLowerCase().includes('tempo limite')) {
-    return 'Conexao com o banco demorou demais. Tente novamente em instantes.'
+  if (normalizedMessage.includes('tempo limite')) {
+    return 'Conexão com o banco demorou demais. Tente novamente em instantes.'
   }
 
-  if (message.toLowerCase().includes('sessao expirada')) {
-    return 'Sua sessao expirou. Faca login novamente.'
+  if (normalizedMessage.includes('sessao expirada')) {
+    return 'Sua sessão expirou. Faça login novamente.'
   }
 
-  if (message.toLowerCase().includes('infinite recursion detected in policy')) {
-    return 'Erro de permissao no banco (RLS). Rode o script de correcao de policies e tente novamente.'
+  if (normalizedMessage.includes('infinite recursion detected in policy')) {
+    return 'Erro de permissão no banco (RLS). Rode o script de correção de policies e tente novamente.'
   }
 
-  if (message.toLowerCase().includes('row-level security')) {
-    return 'Operacao bloqueada por permissao (RLS). Verifique se seu usuario e admin.'
+  if (normalizedMessage.includes('row-level security')) {
+    return 'Operação bloqueada por permissão (RLS). Verifique se seu usuário é admin.'
   }
 
   if (error?.code === '23503') {
-    return 'Nao foi possivel concluir a operacao por referencia invalida entre tabelas.'
+    return 'Não foi possível concluir a operação por referência inválida entre tabelas.'
   }
 
-  if (message.toLowerCase().includes('nao encontrado')) {
-    return 'Aluno nao encontrado no banco.'
+  if (normalizedMessage.includes('nao encontrado')) {
+    return 'Aluno não encontrado no banco.'
   }
 
   return message
@@ -391,14 +395,14 @@ export async function updateStudent(studentId, updates) {
   }
 
   if (!updatedProfile) {
-    throw new Error('Aluno nao encontrado.')
+    throw new Error('Aluno não encontrado.')
   }
 
   await upsertLegacyStudentIfPresent(studentId, updatedProfile)
 
   const refreshedStudent = await getStudentById(studentId)
   if (!refreshedStudent) {
-    throw new Error('Aluno nao encontrado.')
+    throw new Error('Aluno não encontrado.')
   }
 
   return refreshedStudent
@@ -421,7 +425,7 @@ export async function removeStudent(studentId) {
   }
 
   if (!data) {
-    throw new Error('Aluno nao encontrado.')
+    throw new Error('Aluno não encontrado.')
   }
 
   await setLegacyStudentActiveIfPresent(studentId, false)
@@ -432,12 +436,12 @@ export async function addStudentCredit({ studentId, amountInEuras, amountInCents
 
   const value = Number(amountInEuras ?? amountInCents)
   if (!Number.isFinite(value) || value <= 0) {
-    throw new Error('Informe um valor valido para transferencia.')
+    throw new Error('Informe um valor válido para transferencia.')
   }
 
   const student = await getStudentById(studentId)
   if (!student) {
-    throw new Error('Aluno nao encontrado.')
+    throw new Error('Aluno não encontrado.')
   }
 
   const createdByProfileId = await resolveCreatorProfileId(createdBy)
@@ -466,7 +470,7 @@ export async function addStudentCredit({ studentId, amountInEuras, amountInCents
   })
 
   if (!wroteWallet && !wroteLegacy) {
-    throw new Error('Nao foi possivel registrar o deposito: tabelas de lancamento nao foram encontradas.')
+    throw new Error('Não foi possível registrar o deposito: tabelas de lancamento não foram encontradas.')
   }
 
   const refreshedStudent = await getStudentById(studentId)

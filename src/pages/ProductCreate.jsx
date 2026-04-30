@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import SidebarLayout from '../components/SidebarLayout'
+import { buildOptimizedImageDataUrl } from '../lib/imageUpload'
 import { createProduct, getPartnerApiErrorMessage } from '../lib/partnersApi'
 
 function BackIcon() {
@@ -36,9 +37,9 @@ export default function ProductCreate() {
   const [isSaving, setIsSaving] = useState(false)
   const [form, setForm] = useState({
     name: 'Bolsa 50%-',
-    institution: 'Ceeds Maracanau',
+    institution: 'Ceeds Maracanaú',
     value: '80,00',
-    description: 'Bolsa 50% para as mensalidades a partir do 2o semestre',
+    description: 'Bolsa 50% para as mensalidades a partir do 2º semestre',
     imageUrl: '',
   })
 
@@ -50,33 +51,26 @@ export default function ProductCreate() {
     fileInputRef.current?.click()
   }
 
-  const handleImageChange = (event) => {
+  const handleImageChange = async (event) => {
     const file = event.target.files?.[0]
+    event.target.value = ''
 
     if (!file) {
       return
     }
 
     if (!file.type.startsWith('image/')) {
-      setFormError('Selecione um arquivo de imagem valido.')
-      event.target.value = ''
+      setFormError('Selecione um arquivo de imagem válido.')
       return
     }
 
-    const reader = new FileReader()
-
-    reader.onload = () => {
-      const result = typeof reader.result === 'string' ? reader.result : ''
-      setForm((current) => ({ ...current, imageUrl: result }))
+    try {
+      const optimizedImageDataUrl = await buildOptimizedImageDataUrl(file)
+      setForm((current) => ({ ...current, imageUrl: optimizedImageDataUrl }))
       setFormError('')
+    } catch (error) {
+      setFormError(error?.message ?? 'Não foi possível carregar essa imagem.')
     }
-
-    reader.onerror = () => {
-      setFormError('Nao foi possivel carregar essa imagem.')
-    }
-
-    reader.readAsDataURL(file)
-    event.target.value = ''
   }
 
   const handleSubmit = async (event) => {
@@ -89,7 +83,7 @@ export default function ProductCreate() {
     }
 
     if (!form.institution.trim()) {
-      setFormError('Informe a instituicao do produto.')
+      setFormError('Informe a instituição do produto.')
       return
     }
 
@@ -144,7 +138,7 @@ export default function ProductCreate() {
                 </label>
 
                 <label className="product-create-field">
-                  <span>Instituicao:</span>
+                  <span>Instituição:</span>
                   <input type="text" value={form.institution} onChange={handleFieldChange('institution')} />
                 </label>
 
@@ -177,7 +171,7 @@ export default function ProductCreate() {
                 </div>
 
                 <label className="product-create-textarea-field">
-                  <span>Descricao (opcional):</span>
+                  <span>Descrição (opcional):</span>
                   <textarea value={form.description} onChange={handleFieldChange('description')} />
                 </label>
               </div>

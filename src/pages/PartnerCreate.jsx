@@ -50,7 +50,7 @@ function fileToDataUrl(file) {
     const reader = new FileReader()
 
     reader.onload = () => resolve(String(reader.result ?? ''))
-    reader.onerror = () => reject(new Error('Nao foi possivel processar a imagem selecionada.'))
+    reader.onerror = () => reject(new Error('Não foi possível processar a imagem selecionada.'))
 
     reader.readAsDataURL(file)
   })
@@ -62,11 +62,12 @@ export default function PartnerCreate() {
   const [formError, setFormError] = useState('')
   const [isSaving, setIsSaving] = useState(false)
   const [form, setForm] = useState({
-    institution: 'Ceeds Maracanau',
-    user: 'Eula Paula Rocha',
-    phone: '(00) 00000-0000',
-    email: 'admin123@test.com',
-    campus: 'MARACANAU',
+    institution: '',
+    user: '',
+    phone: '',
+    email: '',
+    senha: '',
+    campus: '',
     imageUrl: '',
   })
   const [schedule, setSchedule] = useState({
@@ -97,7 +98,17 @@ export default function PartnerCreate() {
     setFormError('')
 
     if (!form.institution.trim()) {
-      setFormError('Informe o nome da instituicao.')
+      setFormError('Informe o nome da instituição.')
+      return
+    }
+
+    if (!form.email.trim()) {
+      setFormError('Informe o e-mail.')
+      return
+    }
+
+    if (!form.senha.trim() || form.senha.trim().length < 6) {
+      setFormError('A senha deve ter no mínimo 6 caracteres.')
       return
     }
 
@@ -109,6 +120,7 @@ export default function PartnerCreate() {
         user: form.user.trim(),
         phone: form.phone.trim(),
         email: form.email.trim(),
+        senha: form.senha.trim(),
         campus: form.campus.trim(),
         imageUrl: form.imageUrl?.trim() ?? '',
         schedule,
@@ -116,7 +128,7 @@ export default function PartnerCreate() {
 
       navigate(`/parceiros/${partnerId}`)
     } catch (error) {
-      console.info('Falha ao criar parceiro na base mockada.', error)
+      console.info('Falha ao criar parceiro no banco.', error)
       setFormError(getPartnerApiErrorMessage(error))
       setIsSaving(false)
     }
@@ -173,23 +185,28 @@ export default function PartnerCreate() {
           <div className="partner-create-grid">
             <div className="partner-create-column">
               <label className="partner-field">
-                <span>Nome da instituicao:</span>
+                <span>Nome da instituição:</span>
                 <input type="text" value={form.institution} onChange={handleFieldChange('institution')} />
               </label>
 
               <label className="partner-field">
-                <span>Usuario:</span>
+                <span>Usuário:</span>
                 <input type="text" value={form.user} onChange={handleFieldChange('user')} />
               </label>
 
               <label className="partner-field">
-                <span>Numero:</span>
+                <span>Número:</span>
                 <input type="text" value={form.phone} onChange={handleFieldChange('phone')} />
               </label>
 
               <label className="partner-field">
                 <span>E-mail:</span>
                 <input type="email" value={form.email} onChange={handleFieldChange('email')} />
+              </label>
+
+              <label className="partner-field">
+                <span>Senha:</span>
+                <input type="password" value={form.senha} onChange={handleFieldChange('senha')} />
               </label>
             </div>
 
@@ -218,7 +235,7 @@ export default function PartnerCreate() {
               </div>
 
               <div className="partner-hours-box">
-                <h2>Horario de funcionamento:</h2>
+                <h2>Horário de funcionamento:</h2>
 
                 {rows.map((row) => {
                   const item = schedule[row.key]

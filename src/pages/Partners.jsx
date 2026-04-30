@@ -38,6 +38,48 @@ function normalize(text) {
   return text.normalize('NFD').replace(/\p{Diacritic}/gu, '').toUpperCase()
 }
 
+const PREVIEW_PARTNERS_TARGET = 56
+const PREVIEW_CAMPUSES = ['MARACANAU', 'FORTALEZA', 'CAUCAIA', 'EUSEBIO', 'SOBRAL']
+
+function buildPreviewPartners(sourcePartners) {
+  if (!Array.isArray(sourcePartners) || sourcePartners.length === 0) {
+    return Array.from({ length: PREVIEW_PARTNERS_TARGET }).map((_, index) => ({
+      id: `preview-partner-seed-${index + 1}`,
+      name: `PARCEIRO DEMO ${String(index + 1).padStart(3, '0')}`,
+      user: `RESPONSAVEL ${String(index + 1).padStart(3, '0')}`,
+      phone: '',
+      email: '',
+      campus: PREVIEW_CAMPUSES[index % PREVIEW_CAMPUSES.length],
+      imageUrl: '',
+      group: index % 3 === 0 ? 'ceeds' : 'external',
+      logo: index % 3 === 0 ? 'CEEDS' : `P${String(index + 1).padStart(2, '0')}`,
+      variant: index % 2 === 0 ? 'light' : 'black',
+      previewOnly: true,
+    }))
+  }
+
+  const expanded = [...sourcePartners]
+  let cursor = 0
+
+  while (expanded.length < PREVIEW_PARTNERS_TARGET) {
+    const source = sourcePartners[cursor % sourcePartners.length]
+    const cloneNumber = expanded.length + 1
+    const campus = PREVIEW_CAMPUSES[cursor % PREVIEW_CAMPUSES.length]
+
+    expanded.push({
+      ...source,
+      id: `preview-partner-${source.id}-${cloneNumber}`,
+      sourceId: source.id,
+      name: `${source.name} UNIDADE ${String(cloneNumber).padStart(2, '0')}`,
+      campus,
+    })
+
+    cursor += 1
+  }
+
+  return expanded
+}
+
 export default function Partners() {
   const navigate = useNavigate()
   const [partners, setPartners] = useState([])
@@ -59,7 +101,7 @@ export default function Partners() {
         setPartners(nextPartners)
       } catch (error) {
         if (!active) return
-        console.info('Falha ao carregar parceiros mockados.', error)
+        console.info('Falha ao carregar parceiros no banco.', error)
         setLoadError(getPartnerApiErrorMessage(error))
       } finally {
         if (active) {
@@ -75,8 +117,10 @@ export default function Partners() {
     }
   }, [])
 
+  const previewPartners = useMemo(() => buildPreviewPartners(partners), [partners])
+
   const filteredCeeds = useMemo(() => {
-    const ceedsPartners = partners.filter((partner) => partner.group === 'ceeds')
+    const ceedsPartners = previewPartners.filter((partner) => partner.group === 'ceeds')
     const search = normalize(searchTerm.trim())
 
     if (!search) {
@@ -84,10 +128,10 @@ export default function Partners() {
     }
 
     return ceedsPartners.filter((partner) => normalize(`${partner.name} ${partner.campus}`).includes(search))
-  }, [partners, searchTerm])
+  }, [previewPartners, searchTerm])
 
   const filteredExternal = useMemo(() => {
-    const externalPartners = partners.filter((partner) => partner.group === 'external')
+    const externalPartners = previewPartners.filter((partner) => partner.group === 'external')
     const search = normalize(searchTerm.trim())
 
     if (!search) {
@@ -95,7 +139,7 @@ export default function Partners() {
     }
 
     return externalPartners.filter((partner) => normalize(`${partner.name} ${partner.campus}`).includes(search))
-  }, [partners, searchTerm])
+  }, [previewPartners, searchTerm])
 
   return (
     <SidebarLayout>
@@ -138,7 +182,11 @@ export default function Partners() {
                 <button
                   type="button"
                   className="partner-card-logo partner-card-link"
-                  onClick={() => navigate(`/parceiros/${partner.id}`)}
+                  onClick={() => {
+                    if (!partner.previewOnly) {
+                      navigate(`/parceiros/${partner.sourceId ?? partner.id}`)
+                    }
+                  }}
                 >
                   <PartnerLogo label="CEEDS" variant="light" />
                   <p>{partner.campus}</p>
@@ -160,7 +208,11 @@ export default function Partners() {
                 <button
                   type="button"
                   className="partner-card-logo partner-card-link"
-                  onClick={() => navigate(`/parceiros/${partner.id}`)}
+                  onClick={() => {
+                    if (!partner.previewOnly) {
+                      navigate(`/parceiros/${partner.sourceId ?? partner.id}`)
+                    }
+                  }}
                 >
                   <PartnerLogo label={partner.logo} variant={partner.variant} />
                   <p>{partner.campus}</p>

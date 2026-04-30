@@ -130,12 +130,12 @@ export default function PartnerProductCreate() {
                   </label>
 
                   <label className="partner-field">
-                    <span>Titulo do produto:</span>
+                    <span>Título do produto:</span>
                     <input type="text" value={form.title} onChange={handleFieldChange('title')} />
                   </label>
 
                   <label className="partner-field">
-                    <span>Descricao:</span>
+                    <span>Descrição:</span>
                     <input type="text" value={form.description} onChange={handleFieldChange('description')} />
                   </label>
                 </div>

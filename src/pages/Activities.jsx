@@ -46,6 +46,15 @@ const MONTH_OPTIONS = [
   { value: '12', label: 'Dezembro' },
 ]
 
+const PREVIEW_ACTIVITIES_TARGET = 180
+const PREVIEW_ACTIVITY_DESCRIPTIONS = [
+  'Resgate confirmado no parceiro',
+  'Credito promocional semanal',
+  'Ajuste de carteira pelo suporte',
+  'Resgate parcial confirmado',
+  'Bonus de desempenho academico',
+]
+
 function normalize(text) {
   return text.normalize('NFD').replace(/\p{Diacritic}/gu, '').toUpperCase()
 }
@@ -90,6 +99,74 @@ function groupByDate(activities) {
   return Array.from(map.entries()).map(([date, items]) => ({ date, items }))
 }
 
+function toIsoDate(date) {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+function toIsoTime(date) {
+  const hours = String(date.getHours()).padStart(2, '0')
+  const minutes = String(date.getMinutes()).padStart(2, '0')
+  return `${hours}:${minutes}`
+}
+
+function buildPreviewActivities(sourceActivities) {
+  if (!Array.isArray(sourceActivities) || sourceActivities.length === 0) {
+    return Array.from({ length: PREVIEW_ACTIVITIES_TARGET }).map((_, index) => {
+      const baseDate = new Date()
+      baseDate.setDate(baseDate.getDate() - Math.floor(index / 7))
+      baseDate.setMinutes(baseDate.getMinutes() - index * 13)
+
+      return {
+        id: `preview-activity-seed-${index + 1}`,
+        studentName: `ALUNO DEMO ${String(index + 1).padStart(3, '0')}`,
+        description: PREVIEW_ACTIVITY_DESCRIPTIONS[index % PREVIEW_ACTIVITY_DESCRIPTIONS.length],
+        amountEuras: 35 + (index % 9) * 12,
+        date: toIsoDate(baseDate),
+        time: toIsoTime(baseDate),
+      }
+    })
+  }
+
+  const expanded = [...sourceActivities]
+  let cursor = 0
+
+  while (expanded.length < PREVIEW_ACTIVITIES_TARGET) {
+    const source = sourceActivities[cursor % sourceActivities.length]
+    const cloneNumber = expanded.length + 1
+    const description = PREVIEW_ACTIVITY_DESCRIPTIONS[cursor % PREVIEW_ACTIVITY_DESCRIPTIONS.length]
+    const amountVariation = ((cursor % 7) - 3) * 4
+    const amountEuras = Math.max(10, Number(source.amountEuras ?? 0) + amountVariation)
+    const seedDate = new Date(`${source.date}T${source.time}:00`)
+    const referenceDate = Number.isNaN(seedDate.getTime()) ? new Date() : seedDate
+    const shiftedDate = new Date(referenceDate)
+
+    shiftedDate.setDate(shiftedDate.getDate() - (1 + Math.floor(cursor / 6)))
+    shiftedDate.setMinutes(shiftedDate.getMinutes() - ((cursor % 5) + 1) * 9)
+
+    expanded.push({
+      ...source,
+      id: `preview-activity-${source.id}-${cloneNumber}`,
+      studentName: `${source.studentName} ${String(cloneNumber).padStart(3, '0')}`,
+      description,
+      amountEuras,
+      date: toIsoDate(shiftedDate),
+      time: toIsoTime(shiftedDate),
+    })
+
+    cursor += 1
+  }
+
+  return expanded.sort((a, b) => {
+    if (a.date !== b.date) {
+      return b.date.localeCompare(a.date)
+    }
+    return b.time.localeCompare(a.time)
+  })
+}
+
 export default function Activities() {
   const filterRef = useRef(null)
   const [searchTerm, setSearchTerm] = useState('')
@@ -131,6 +208,8 @@ export default function Activities() {
     }
   }, [])
 
+  const previewActivities = useMemo(() => buildPreviewActivities(activities), [activities])
+
   useEffect(() => {
     if (!showDateFilter) {
       return undefined
@@ -149,7 +228,7 @@ export default function Activities() {
   const filteredActivities = useMemo(() => {
     const normalizedSearch = normalize(searchTerm.trim())
 
-    return activities.filter((activity) => {
+    return previewActivities.filter((activity) => {
       const matchesSearch =
         !normalizedSearch ||
         normalize(activity.studentName).includes(normalizedSearch) ||
@@ -165,25 +244,25 @@ export default function Activities() {
 
       return matchesSearch && matchesDate
     })
-  }, [activities, dateFilterType, searchTerm, selectedMonth, selectedMonthYear, selectedYear])
+  }, [dateFilterType, previewActivities, searchTerm, selectedMonth, selectedMonthYear, selectedYear])
 
   const yearOptions = useMemo(() => {
-    const values = Array.from(new Set(activities.map((activity) => activity.date.slice(0, 4))))
+    const values = Array.from(new Set(previewActivities.map((activity) => activity.date.slice(0, 4))))
     if (values.length === 0) {
       return [String(new Date().getFullYear())]
     }
     return values.sort((a, b) => b.localeCompare(a))
-  }, [activities])
+  }, [previewActivities])
 
   const groupedActivities = useMemo(() => groupByDate(filteredActivities), [filteredActivities])
 
   const handleDownloadFile = () => {
     if (filteredActivities.length === 0) {
-      setActionMessage('Nao ha atividades para exportar com os filtros atuais.')
+      setActionMessage('Não há atividades para exportar com os filtros atuais.')
       return
     }
 
-    const header = ['Data', 'Hora', 'Aluno', 'Descricao', 'ValorEuras']
+    const header = ['Data', 'Hora', 'Aluno', 'Descrição', 'ValorEuras']
     const rows = filteredActivities.map((activity) => [
       `\u200B${formatDateForExport(activity.date)}`,
       activity.time,

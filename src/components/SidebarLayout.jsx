@@ -66,9 +66,15 @@ function MenuIcon({ type }) {
 
 export default function SidebarLayout({ title, children, showSidebarSignOut = true }) {
   const navigate = useNavigate()
-  const { user, signOut } = useAuth()
+  const { user, profile, signOut } = useAuth()
   const [signingOut, setSigningOut] = useState(false)
   const [signOutError, setSignOutError] = useState('')
+  const profileName =
+    profile?.nome_completo?.trim() ||
+    user?.user_metadata?.full_name?.trim() ||
+    user?.user_metadata?.name?.trim() ||
+    'Eula Paula'
+  const profileEmail = profile?.email?.trim() || user?.email || 'Sem e-mail'
 
   const handleSignOut = async () => {
     setSigningOut(true)
@@ -78,20 +84,20 @@ export default function SidebarLayout({ title, children, showSidebarSignOut = tr
       const { error } = await signOut()
 
       if (error) {
-        console.error('Falha ao encerrar sessao no Supabase.', {
+        console.error('Falha ao encerrar sessão no Supabase.', {
           message: error.message,
           status: error.status,
           code: error.code,
           name: error.name,
         })
-        setSignOutError('Nao foi possivel encerrar a sessao agora. Tente novamente.')
+        setSignOutError('Não foi possível encerrar a sessão agora. Tente novamente.')
         return
       }
 
       navigate('/login', { replace: true })
     } catch (error) {
-      console.error('Erro inesperado ao encerrar sessao.', error)
-      setSignOutError('Nao foi possivel encerrar a sessao agora. Tente novamente.')
+      console.error('Erro inesperado ao encerrar sessão.', error)
+      setSignOutError('Não foi possível encerrar a sessão agora. Tente novamente.')
     } finally {
       setSigningOut(false)
     }
@@ -105,8 +111,8 @@ export default function SidebarLayout({ title, children, showSidebarSignOut = tr
             <div className="coin-logo" aria-hidden="true" />
 
             <div className="profile-block">
-              <h2>Eula Paula</h2>
-              <p>{user?.email ?? 'Sem e-mail'}</p>
+              <h2>{profileName}</h2>
+              <p>{profileEmail}</p>
             </div>
 
             <nav className="nav-list" aria-label="Menu principal">
@@ -131,7 +137,7 @@ export default function SidebarLayout({ title, children, showSidebarSignOut = tr
           {showSidebarSignOut ? (
             <div className="side-menu-footer">
               <button type="button" className="signout-button" onClick={handleSignOut}>
-                {signingOut ? 'Encerrando...' : 'Encerrar sessao'}
+                {signingOut ? 'Encerrando...' : 'Encerrar sessão'}
               </button>
               {signOutError ? <p className="form-message form-message-error">{signOutError}</p> : null}
             </div>

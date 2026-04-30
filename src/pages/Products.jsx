@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+﻿import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import SidebarLayout from '../components/SidebarLayout'
 import { getPartnerApiErrorMessage, listProducts } from '../lib/partnersApi'
+import { runWithRetries, withRequestTimeout } from '../lib/requestGuards'
 
 function SearchIcon() {
   return (
@@ -50,6 +51,14 @@ function normalize(text) {
   return text.normalize('NFD').replace(/\p{Diacritic}/gu, '').toUpperCase()
 }
 
+function buildPreviewProducts(sourceProducts) {
+  if (!Array.isArray(sourceProducts)) {
+    return []
+  }
+
+  return sourceProducts
+}
+
 export default function Products() {
   const navigate = useNavigate()
   const location = useLocation()
@@ -60,6 +69,7 @@ export default function Products() {
   const [products, setProducts] = useState([])
   const [loadingProducts, setLoadingProducts] = useState(true)
   const [loadError, setLoadError] = useState('')
+  const [reloadNonce, setReloadNonce] = useState(0)
 
   useEffect(() => {
     let active = true
@@ -69,7 +79,13 @@ export default function Products() {
       setLoadError('')
 
       try {
-        const nextProducts = await listProducts()
+        const nextProducts = await runWithRetries(
+          () =>
+            withRequestTimeout(listProducts(), {
+              message: 'Tempo limite ao carregar produtos. Tente novamente.',
+            }),
+          { attempts: 2 },
+        )
         if (!active) return
         setProducts(nextProducts)
       } catch (error) {
@@ -87,7 +103,7 @@ export default function Products() {
     return () => {
       active = false
     }
-  }, [])
+  }, [reloadNonce])
 
   useEffect(() => {
     if (!location.state?.resetFilters) {
@@ -115,15 +131,17 @@ export default function Products() {
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [showFilters])
 
+  const previewProducts = useMemo(() => buildPreviewProducts(products), [products])
+
   const institutionOptions = useMemo(
-    () => ['TODAS', ...new Set(products.map((product) => product.institution))],
-    [products],
+    () => ['TODAS', ...new Set(previewProducts.map((product) => product.institution))],
+    [previewProducts],
   )
 
   const filteredProducts = useMemo(() => {
     const search = normalize(searchTerm.trim())
 
-    return products.filter((product) => {
+    return previewProducts.filter((product) => {
       const matchesSearch =
         !search ||
         normalize(product.name).includes(search) ||
@@ -134,7 +152,7 @@ export default function Products() {
 
       return matchesSearch && matchesInstitution
     })
-  }, [products, searchTerm, selectedInstitution])
+  }, [previewProducts, searchTerm, selectedInstitution])
 
   const hasActiveFilters = searchTerm.trim() || selectedInstitution !== 'TODAS'
 
@@ -171,7 +189,7 @@ export default function Products() {
             {showFilters ? (
               <div className="products-filter-popover">
                 <label className="products-filter-row">
-                  <span>Instituicao:</span>
+                  <span>InstituiÃ§Ã£o:</span>
                   <select
                     value={selectedInstitution}
                     onChange={(event) => setSelectedInstitution(event.target.value)}
@@ -199,7 +217,14 @@ export default function Products() {
           <h2>Produtos em alta</h2>
 
           {loadingProducts ? <p className="products-empty-state">Carregando produtos...</p> : null}
-          {loadError ? <p className="products-empty-state">{loadError}</p> : null}
+          {loadError && !loadingProducts ? (
+            <div className="products-empty-state products-empty-state-with-action">
+              <p>{loadError}</p>
+              <button type="button" className="data-retry-button" onClick={() => setReloadNonce((current) => current + 1)}>
+                Tentar novamente
+              </button>
+            </div>
+          ) : null}
 
           {!loadingProducts && !loadError ? (
             <div className="products-grid">
@@ -208,13 +233,19 @@ export default function Products() {
                   <button
                     type="button"
                     className="products-card-logo products-card-link"
-                    onClick={() => navigate(`/produtos/${product.id}`)}
+                    onClick={() => {
+                      if (!product.previewOnly) {
+                        navigate(`/produtos/${product.sourceId ?? product.id}`)
+                      }
+                    }}
                   >
                     {product.imageUrl ? (
                       <img
                         src={product.imageUrl}
                         alt={product.name}
                         className="products-card-image"
+                        loading="lazy"
+                        decoding="async"
                       />
                     ) : (
                       <ProductCardIcon />
@@ -239,3 +270,4 @@ export default function Products() {
     </SidebarLayout>
   )
 }
+

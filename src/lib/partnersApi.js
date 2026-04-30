@@ -1,11 +1,82 @@
+import { createClient } from '@supabase/supabase-js'
 import { ensureFreshSession, supabase } from './supabase'
 
 const euras = supabase.schema('euras')
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
+const SUPABASE_SERVICE_ROLE_KEY = import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY
+let supabaseAdminClient = null
 
 const DEFAULT_SCHEDULE = {
   week: { open: true, openHour: '06', openMinute: '00', closeHour: '18', closeMinute: '00' },
   saturday: { open: true, openHour: '08', openMinute: '00', closeHour: '13', closeMinute: '00' },
   sunday: { open: false, openHour: '00', openMinute: '00', closeHour: '00', closeMinute: '00' },
+}
+const PRODUCTS_CACHE_TTL_MS = 45000
+let cachedCatalogProducts = null
+const cachedPartnerProducts = new Map()
+const inFlightProductRequests = new Map()
+
+function makeCacheEntry(data) {
+  return {
+    data,
+    expiresAt: Date.now() + PRODUCTS_CACHE_TTL_MS,
+  }
+}
+
+function readCacheEntry(entry) {
+  if (!entry) {
+    return null
+  }
+
+  if (entry.expiresAt <= Date.now()) {
+    return null
+  }
+
+  return entry.data
+}
+
+function getCachedCatalogProducts() {
+  return readCacheEntry(cachedCatalogProducts)
+}
+
+function setCachedCatalogProducts(products) {
+  cachedCatalogProducts = makeCacheEntry(products)
+}
+
+function getCachedPartnerProducts(partnerId) {
+  return readCacheEntry(cachedPartnerProducts.get(String(partnerId)))
+}
+
+function setCachedPartnerProducts(partnerId, payload) {
+  cachedPartnerProducts.set(String(partnerId), makeCacheEntry(payload))
+}
+
+function invalidateProductCaches(partnerId) {
+  cachedCatalogProducts = null
+
+  if (partnerId) {
+    cachedPartnerProducts.delete(String(partnerId))
+    return
+  }
+
+  cachedPartnerProducts.clear()
+}
+
+function runInFlightProductRequest(cacheKey, requestFactory) {
+  const inFlightRequest = inFlightProductRequests.get(cacheKey)
+  if (inFlightRequest) {
+    return inFlightRequest
+  }
+
+  const requestPromise = requestFactory().finally(() => {
+    if (inFlightProductRequests.get(cacheKey) === requestPromise) {
+      inFlightProductRequests.delete(cacheKey)
+    }
+  })
+
+  inFlightProductRequests.set(cacheKey, requestPromise)
+  return requestPromise
 }
 
 function normalizeTypeToGroup(partner) {
@@ -102,6 +173,145 @@ function parseEurasValue(value) {
 function isMissingRelationError(error) {
   const message = String(error?.message ?? '').toLowerCase()
   return error?.code === 'PGRST205' || message.includes('could not find the table') || message.includes('relation')
+}
+
+function isMissingColumnError(error, columnName) {
+  const joined = [
+    String(error?.message ?? '').toLowerCase(),
+    String(error?.details ?? '').toLowerCase(),
+    String(error?.hint ?? '').toLowerCase(),
+  ].join(' ')
+
+  return joined.includes(String(columnName ?? '').toLowerCase()) && joined.includes('column')
+}
+
+function getSupabaseAdminClient() {
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+    return null
+  }
+
+  if (!supabaseAdminClient) {
+    supabaseAdminClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+        detectSessionInUrl: false,
+      },
+    })
+  }
+
+  return supabaseAdminClient
+}
+
+function createPartnerSignupClient() {
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+    throw new Error('Variaveis do Supabase não foram configuradas para criar o usuário parceiro.')
+  }
+
+  let projectRef = 'supabase'
+
+  try {
+    projectRef = new URL(SUPABASE_URL).hostname.split('.')[0] || projectRef
+  } catch {
+    // Mantem fallback caso URL esteja malformada.
+  }
+
+  return createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+      detectSessionInUrl: false,
+      storageKey: `sb-${projectRef}-partner-signup-${Date.now()}`,
+    },
+  })
+}
+
+async function createPartnerAuthUser({ email, password, displayName }) {
+  const adminClient = getSupabaseAdminClient()
+
+  if (adminClient) {
+    const { data, error } = await adminClient.auth.admin.createUser({
+      email,
+      password,
+      email_confirm: true,
+      user_metadata: {
+        name: displayName,
+        full_name: displayName,
+      },
+    })
+
+    if (error) {
+      throw error
+    }
+
+    const authUserId = data?.user?.id
+    if (!authUserId) {
+      throw new Error('Não foi possível obter o identificador do usuário no Auth.')
+    }
+
+    return {
+      userId: authUserId,
+      deleteAuthUser: async () => {
+        const { error: deleteError } = await adminClient.auth.admin.deleteUser(authUserId)
+        if (deleteError) {
+          throw deleteError
+        }
+      },
+    }
+  }
+
+  const signupClient = createPartnerSignupClient()
+  const { data, error } = await signupClient.auth.signUp({
+    email,
+    password,
+    options: {
+      data: {
+        name: displayName,
+        full_name: displayName,
+      },
+    },
+  })
+
+  if (error) {
+    throw error
+  }
+
+  const authUserId = data?.user?.id
+  if (!authUserId) {
+    throw new Error('Não foi possível obter o identificador do usuário criado no Auth.')
+  }
+
+  return {
+    userId: authUserId,
+    deleteAuthUser: null,
+  }
+}
+
+async function insertPartnerProfileWithAuthId(profilePayload) {
+  const payloadWithAuthUserId = {
+    ...profilePayload,
+    auth_user_id: profilePayload.id,
+  }
+
+  const responseWithAuthUserId = await euras
+    .from('perfis')
+    .insert(payloadWithAuthUserId)
+    .select('id')
+    .single()
+
+  if (!responseWithAuthUserId.error) {
+    return responseWithAuthUserId
+  }
+
+  if (!isMissingColumnError(responseWithAuthUserId.error, 'auth_user_id')) {
+    return responseWithAuthUserId
+  }
+
+  return euras
+    .from('perfis')
+    .insert(profilePayload)
+    .select('id')
+    .single()
 }
 
 function ensureNumber(value, fallback = 0) {
@@ -201,7 +411,7 @@ function mapCatalogProduct(product, institutionByProfileId) {
   return {
     id: product.id,
     name: product.titulo ?? '',
-    institution: institutionByProfileId.get(product.perfil_parceiro_id) ?? 'Instituicao nao encontrada',
+    institution: institutionByProfileId.get(product.perfil_parceiro_id) ?? 'Instituição não encontrada',
     description: product.descricao ?? '',
     priceEuras: ensureNumber(product.preco_euras),
     imageUrl: product.url_imagem ?? '',
@@ -512,6 +722,44 @@ async function getRawPartnerById(partnerId) {
   return data
 }
 
+async function getPartnerIdentityById(partnerId) {
+  const partnerRow = await getRawPartnerById(partnerId)
+
+  if (partnerRow) {
+    return mapPartner(partnerRow)
+  }
+
+  const { data: profile, error: profileError } = await euras
+    .from('perfis')
+    .select('id, nome_completo, telefone, email, campus, url_avatar, ativo')
+    .eq('id', partnerId)
+    .eq('papel', 'parceiro')
+    .eq('ativo', true)
+    .limit(1)
+    .maybeSingle()
+
+  if (profileError) {
+    throw profileError
+  }
+
+  if (!profile) {
+    return null
+  }
+
+  return mapPartner({
+    id: profile.id,
+    perfil_parceiro_id: profile.id,
+    nome_instituicao: profile.nome_completo,
+    usuario_responsavel_nome: profile.nome_completo,
+    telefone: profile.telefone,
+    email: profile.email,
+    campus: profile.campus,
+    url_imagem: profile.url_avatar,
+    tipo: profile.nome_completo?.startsWith('CEEDS') ? 'ceeds' : 'externo',
+    ativo: profile.ativo,
+  })
+}
+
 async function getRawPartnerProductById(profileId, productId) {
   const { data, error } = await euras
     .from('produtos')
@@ -531,41 +779,45 @@ async function getRawPartnerProductById(profileId, productId) {
 
 export function getPartnerApiErrorMessage(error) {
   const message = error?.message ?? ''
+  const normalizedMessage = message
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
+    .toLowerCase()
 
   if (!message) {
-    return 'Nao foi possivel concluir a operacao no banco de parceiros.'
+    return 'Não foi possível concluir a operação no banco de parceiros.'
   }
 
-  if (message.toLowerCase().includes('tempo limite')) {
-    return 'Conexao com o banco demorou demais. Tente novamente em instantes.'
+  if (normalizedMessage.includes('tempo limite')) {
+    return 'Conexão com o banco demorou demais. Tente novamente em instantes.'
   }
 
-  if (message.toLowerCase().includes('sessao expirada')) {
-    return 'Sua sessao expirou. Faca login novamente.'
+  if (normalizedMessage.includes('sessao expirada')) {
+    return 'Sua sessão expirou. Faça login novamente.'
   }
 
-  if (message.toLowerCase().includes('infinite recursion detected in policy')) {
-    return 'Erro de permissao no banco (RLS). Rode o script de correcao de policies e tente novamente.'
+  if (normalizedMessage.includes('infinite recursion detected in policy')) {
+    return 'Erro de permissão no banco (RLS). Rode o script de correção de policies e tente novamente.'
   }
 
-  if (message.toLowerCase().includes('row-level security')) {
-    return 'Operacao bloqueada por permissao (RLS). Verifique se seu usuario e admin.'
+  if (normalizedMessage.includes('row-level security')) {
+    return 'Operação bloqueada por permissão (RLS). Verifique se seu usuário é admin.'
   }
 
-  if (message.toLowerCase().includes('invalid input value for enum tipo_parceiro')) {
-    return 'Valor de tipo de parceiro invalido no schema atual. Atualize o schema ou rode o script de bootstrap final.'
+  if (normalizedMessage.includes('invalid input value for enum tipo_parceiro')) {
+    return 'Valor de tipo de parceiro inválido no schema atual. Atualize o schema ou rode o script de bootstrap final.'
   }
 
   if (error?.code === '23503') {
-    return 'Nao foi possivel concluir a operacao por referencia invalida entre tabelas.'
+    return 'Não foi possível concluir a operação por referência inválida entre tabelas.'
   }
 
   if (error?.code === '23505') {
-    return 'Ja existe um registro com os mesmos dados unicos.'
+    return 'Já existe um registro com os mesmos dados únicos.'
   }
 
-  if (message.toLowerCase().includes('nao encontrado')) {
-    return 'Registro nao encontrado no banco.'
+  if (normalizedMessage.includes('nao encontrado')) {
+    return 'Registro não encontrado no banco.'
   }
 
   return message
@@ -642,59 +894,158 @@ export async function getPartnerById(partnerId) {
   }
 }
 
-export async function createPartner({ name, user, phone, email, campus, imageUrl, schedule }) {
+export async function createPartner({ name, user, phone, email, senha, campus, imageUrl, schedule }) {
   await ensureFreshSession()
 
   const normalizedName = name?.trim().toUpperCase() ?? ''
   if (!normalizedName) {
-    throw new Error('Informe o nome da instituicao.')
+    throw new Error('Informe o nome da instituição.')
+  }
+
+  const normalizedEmail = email?.trim().toLowerCase() ?? ''
+  if (!normalizedEmail) {
+    throw new Error('Informe o e-mail.')
+  }
+
+  const normalizedPassword = senha?.trim() ?? ''
+  if (!normalizedPassword || normalizedPassword.length < 6) {
+    throw new Error('A senha deve ter no mínimo 6 caracteres.')
   }
 
   const normalizedUser = user?.trim().toUpperCase() ?? normalizedName
   const normalizedCampus = campus?.trim().toUpperCase() ?? ''
   const normalizedImageUrl = imageUrl?.trim() ?? ''
+  const normalizedPhone = phone?.trim() ?? ''
+  let createdAuthUserId = null
+  let deleteAuthUser = null
+  let createdProfileId = null
+  let createdPartnerId = null
 
-  const { data: profile, error: profileError } = await euras
-    .from('perfis')
-    .insert({
+  try {
+    const authCreation = await createPartnerAuthUser({
+      email: normalizedEmail,
+      password: normalizedPassword,
+      displayName: normalizedUser,
+    })
+
+    createdAuthUserId = authCreation.userId
+    deleteAuthUser = authCreation.deleteAuthUser
+
+    const { data: profile, error: profileError } = await insertPartnerProfileWithAuthId({
+      id: createdAuthUserId,
       nome_completo: normalizedUser,
       papel: 'parceiro',
-      telefone: phone?.trim() ?? '',
-      email: email?.trim() ?? '',
+      telefone: normalizedPhone,
+      email: normalizedEmail,
       campus: normalizedCampus,
       url_avatar: normalizedImageUrl,
       ativo: true,
     })
-    .select('id')
-    .single()
 
-  if (profileError) {
-    throw profileError
-  }
-
-  const partnerPayload = {
-    perfil_parceiro_id: profile.id,
-    nome_instituicao: normalizedName,
-    usuario_responsavel_nome: normalizedUser,
-    telefone: phone?.trim() ?? '',
-    email: email?.trim() ?? '',
-    campus: normalizedCampus,
-    url_imagem: normalizedImageUrl,
-    ativo: true,
-  }
-
-  const { data: partner, error: partnerError } = await insertPartnerWithCompatibleType(partnerPayload)
-
-  if (partnerError) {
-    if (isMissingRelationError(partnerError)) {
-      return profile.id
+    if (profileError) {
+      throw profileError
     }
 
-    throw partnerError
-  }
+    createdProfileId = profile.id
 
-  await replacePartnerSchedule(partner.id, schedule)
-  return partner.id
+    const partnerPayload = {
+      perfil_parceiro_id: profile.id,
+      perfil_id: profile.id,
+      nome_instituicao: normalizedName,
+      usuario_responsavel_nome: normalizedUser,
+      telefone: normalizedPhone,
+      email: normalizedEmail,
+      campus: normalizedCampus,
+      url_imagem: normalizedImageUrl,
+      ativo: true,
+    }
+
+    let { data: partner, error: partnerError } = await insertPartnerWithCompatibleType(partnerPayload)
+
+    if (partnerError && isMissingColumnError(partnerError, 'perfil_id')) {
+      const fallbackPartnerPayload = { ...partnerPayload }
+      delete fallbackPartnerPayload.perfil_id
+
+      const fallbackInsert = await insertPartnerWithCompatibleType(fallbackPartnerPayload)
+      partner = fallbackInsert.data
+      partnerError = fallbackInsert.error
+    }
+
+    if (partnerError) {
+      if (isMissingRelationError(partnerError)) {
+        invalidateProductCaches()
+        return profile.id
+      }
+
+      throw partnerError
+    }
+
+    createdPartnerId = partner.id
+    await replacePartnerSchedule(partner.id, schedule)
+    invalidateProductCaches()
+    return partner.id
+  } catch (error) {
+    if (createdPartnerId) {
+      const { error: removePartnerError } = await euras
+        .from('parceiros')
+        .delete()
+        .eq('id', createdPartnerId)
+
+      if (removePartnerError) {
+        console.error('Falha ao reverter parceiro apos erro de cadastro.', removePartnerError)
+      }
+    }
+
+    if (createdProfileId) {
+      const { error: removeProfileError } = await euras
+        .from('perfis')
+        .delete()
+        .eq('id', createdProfileId)
+
+      if (removeProfileError) {
+        console.error('Falha ao reverter perfil apos erro de cadastro.', removeProfileError)
+      }
+    }
+
+    let authCleanupFailed = false
+    let canCleanupAuthUser = false
+
+    if (deleteAuthUser) {
+      canCleanupAuthUser = true
+      try {
+        await deleteAuthUser()
+      } catch (cleanupError) {
+        authCleanupFailed = true
+        console.error('Falha ao remover usuário do Auth apos erro no cadastro do parceiro.', cleanupError)
+      }
+    }
+
+    if (createdAuthUserId) {
+      let message =
+        'Falha ao concluir o cadastro do parceiro apos criar o usuário de autenticacao.'
+
+      if (!canCleanupAuthUser) {
+        message += ' O usuário de autenticacao foi criado e pode precisar ser removido manualmente no Supabase Auth.'
+      } else if (authCleanupFailed) {
+        message += ' O usuário de autenticacao foi criado, mas a limpeza automatica falhou. Remova manualmente no Supabase Auth.'
+      } else {
+        message += ' O usuário de autenticacao criado foi revertido automaticamente.'
+      }
+
+      if (error?.message) {
+        message += ` Motivo original: ${error.message}`
+      }
+
+      const wrappedError = new Error(message)
+      wrappedError.code = error?.code
+      wrappedError.details = error?.details
+      wrappedError.hint = error?.hint
+      wrappedError.cause = error
+      throw wrappedError
+    }
+
+    throw error
+  }
 }
 
 export async function updatePartner(partnerId, { name, user, phone, email, campus, imageUrl, schedule }) {
@@ -725,9 +1076,10 @@ export async function updatePartner(partnerId, { name, user, phone, email, campu
     }
 
     if (!updatedProfile) {
-      throw new Error('Parceiro nao encontrado.')
+      throw new Error('Parceiro não encontrado.')
     }
 
+    invalidateProductCaches(partnerId)
     return
   }
 
@@ -767,6 +1119,7 @@ export async function updatePartner(partnerId, { name, user, phone, email, campu
   }
 
   await replacePartnerSchedule(partnerId, schedule)
+  invalidateProductCaches(partnerId)
 }
 
 export async function removePartner(partnerId) {
@@ -788,9 +1141,10 @@ export async function removePartner(partnerId) {
     }
 
     if (!profile) {
-      throw new Error('Parceiro nao encontrado.')
+      throw new Error('Parceiro não encontrado.')
     }
 
+    invalidateProductCaches(partnerId)
     return
   }
 
@@ -813,44 +1167,68 @@ export async function removePartner(partnerId) {
       throw profileError
     }
   }
+
+  invalidateProductCaches(partnerId)
 }
 
 export async function listPartnerProducts(partnerId) {
-  await ensureFreshSession()
-
-  const partner = await getPartnerById(partnerId)
-
-  if (!partner) {
-    return { partner: null, products: [] }
+  const cacheHit = getCachedPartnerProducts(partnerId)
+  if (cacheHit) {
+    return cacheHit
   }
 
-  if (!partner.profileId) {
-    return { partner, products: [] }
-  }
+  return runInFlightProductRequest(`partner-products:${partnerId}`, async () => {
+    await ensureFreshSession()
 
-  const { data, error } = await euras
-    .from('produtos')
-    .select('id, perfil_parceiro_id, titulo, descricao, preco_euras, url_imagem, ativo')
-    .eq('perfil_parceiro_id', partner.profileId)
-    .eq('ativo', true)
-    .order('titulo', { ascending: true })
+    const partner = await getPartnerIdentityById(partnerId)
 
-  if (error) {
-    throw error
-  }
+    if (!partner) {
+      const emptyPayload = { partner: null, products: [] }
+      setCachedPartnerProducts(partnerId, emptyPayload)
+      return emptyPayload
+    }
 
-  return {
-    partner,
-    products: (data ?? []).map((product) => mapPartnerProduct(product, partner.name)),
+    if (!partner.profileId) {
+      const emptyPayload = { partner, products: [] }
+      setCachedPartnerProducts(partnerId, emptyPayload)
+      return emptyPayload
+    }
+
+    const { data, error } = await euras
+      .from('produtos')
+      .select('id, perfil_parceiro_id, titulo, descricao, preco_euras, url_imagem, ativo')
+      .eq('perfil_parceiro_id', partner.profileId)
+      .eq('ativo', true)
+      .order('titulo', { ascending: true })
+
+    if (error) {
+      throw error
+    }
+
+    const payload = {
+      partner,
+      products: (data ?? []).map((product) => mapPartnerProduct(product, partner.name)),
+    }
+
+    setCachedPartnerProducts(partnerId, payload)
+    return payload
+  })
+}
+
+export async function prefetchPartnerProducts(partnerId) {
+  try {
+    await listPartnerProducts(partnerId)
+  } catch {
+    // Prefetch não deve interromper a navegação principal.
   }
 }
 
 export async function createPartnerProduct(partnerId, { title, description, priceEuras, imageUrl }) {
   await ensureFreshSession()
 
-  const partner = await getPartnerById(partnerId)
+  const partner = await getPartnerIdentityById(partnerId)
   if (!partner || !partner.profileId) {
-    throw new Error('Parceiro nao encontrado.')
+    throw new Error('Parceiro não encontrado.')
   }
 
   const normalizedTitle = title?.trim() ?? ''
@@ -860,7 +1238,7 @@ export async function createPartnerProduct(partnerId, { title, description, pric
 
   const numericPrice = Number(priceEuras)
   if (Number.isNaN(numericPrice) || numericPrice < 0) {
-    throw new Error('Informe um preco de Euras valido.')
+    throw new Error('Informe um preco de Euras válido.')
   }
 
   const { error } = await euras
@@ -877,12 +1255,14 @@ export async function createPartnerProduct(partnerId, { title, description, pric
   if (error) {
     throw error
   }
+
+  invalidateProductCaches(partnerId)
 }
 
 export async function getPartnerProductById(partnerId, productId) {
   await ensureFreshSession()
 
-  const partner = await getPartnerById(partnerId)
+  const partner = await getPartnerIdentityById(partnerId)
   if (!partner || !partner.profileId) {
     return null
   }
@@ -907,19 +1287,19 @@ export async function getPartnerProductById(partnerId, productId) {
 export async function updatePartnerProduct(partnerId, productId, { title, description, priceEuras, imageUrl }) {
   await ensureFreshSession()
 
-  const partner = await getPartnerById(partnerId)
+  const partner = await getPartnerIdentityById(partnerId)
   if (!partner || !partner.profileId) {
-    throw new Error('Parceiro nao encontrado.')
+    throw new Error('Parceiro não encontrado.')
   }
 
   const currentProduct = await getRawPartnerProductById(partner.profileId, productId)
   if (!currentProduct) {
-    throw new Error('Produto nao encontrado.')
+    throw new Error('Produto não encontrado.')
   }
 
   const numericPrice = Number(priceEuras)
   if (Number.isNaN(numericPrice) || numericPrice < 0) {
-    throw new Error('Informe um preco de Euras valido.')
+    throw new Error('Informe um preco de Euras válido.')
   }
 
   const { error } = await euras
@@ -936,19 +1316,21 @@ export async function updatePartnerProduct(partnerId, productId, { title, descri
   if (error) {
     throw error
   }
+
+  invalidateProductCaches(partnerId)
 }
 
 export async function removePartnerProduct(partnerId, productId) {
   await ensureFreshSession()
 
-  const partner = await getPartnerById(partnerId)
+  const partner = await getPartnerIdentityById(partnerId)
   if (!partner || !partner.profileId) {
-    throw new Error('Parceiro nao encontrado.')
+    throw new Error('Parceiro não encontrado.')
   }
 
   const product = await getRawPartnerProductById(partner.profileId, productId)
   if (!product) {
-    throw new Error('Produto nao encontrado.')
+    throw new Error('Produto não encontrado.')
   }
 
   const { error } = await euras
@@ -960,28 +1342,40 @@ export async function removePartnerProduct(partnerId, productId) {
   if (error) {
     throw error
   }
+
+  invalidateProductCaches(partnerId)
 }
 
 export async function listProducts() {
-  await ensureFreshSession()
-
-  const { data, error } = await euras
-    .from('produtos')
-    .select('id, perfil_parceiro_id, titulo, descricao, preco_euras, url_imagem, ativo')
-    .eq('ativo', true)
-    .order('titulo', { ascending: true })
-
-  if (error) {
-    throw error
+  const cacheHit = getCachedCatalogProducts()
+  if (cacheHit) {
+    return cacheHit
   }
 
-  const products = data ?? []
-  const profileIds = [...new Set(products.map((product) => product.perfil_parceiro_id).filter(Boolean))]
-  const institutionByProfileId = await loadInstitutionsByProfileIds(profileIds)
+  return runInFlightProductRequest('catalog-products', async () => {
+    await ensureFreshSession()
 
-  return products
-    .map((product) => mapCatalogProduct(product, institutionByProfileId))
-    .sort((a, b) => a.name.localeCompare(b.name))
+    const { data, error } = await euras
+      .from('produtos')
+      .select('id, perfil_parceiro_id, titulo, descricao, preco_euras, url_imagem, ativo')
+      .eq('ativo', true)
+      .order('titulo', { ascending: true })
+
+    if (error) {
+      throw error
+    }
+
+    const products = data ?? []
+    const profileIds = [...new Set(products.map((product) => product.perfil_parceiro_id).filter(Boolean))]
+    const institutionByProfileId = await loadInstitutionsByProfileIds(profileIds)
+
+    const mappedProducts = products
+      .map((product) => mapCatalogProduct(product, institutionByProfileId))
+      .sort((a, b) => a.name.localeCompare(b.name))
+
+    setCachedCatalogProducts(mappedProducts)
+    return mappedProducts
+  })
 }
 
 export async function createProduct({ name, institution, description, priceEuras, imageUrl }) {
@@ -994,17 +1388,17 @@ export async function createProduct({ name, institution, description, priceEuras
 
   const normalizedInstitution = institution?.trim() ?? ''
   if (!normalizedInstitution) {
-    throw new Error('Informe a instituicao do produto.')
+    throw new Error('Informe a instituição do produto.')
   }
 
   const numericPrice = parseEurasValue(priceEuras)
   if (!Number.isFinite(numericPrice) || numericPrice < 0) {
-    throw new Error('Informe um valor valido para o produto.')
+    throw new Error('Informe um valor válido para o produto.')
   }
 
   const profileId = await resolvePartnerProfileIdByInstitution(normalizedInstitution)
   if (!profileId) {
-    throw new Error('Instituicao nao cadastrada como parceiro. Cadastre o parceiro antes de criar o produto.')
+    throw new Error('Instituição não cadastrada como parceiro. Cadastre o parceiro antes de criar o produto.')
   }
 
   const { error } = await euras
@@ -1021,6 +1415,8 @@ export async function createProduct({ name, institution, description, priceEuras
   if (error) {
     throw error
   }
+
+  invalidateProductCaches()
 }
 
 export async function getProductById(productId) {
@@ -1062,7 +1458,7 @@ export async function updateProduct(productId, { name, institution, description,
   }
 
   if (!currentProduct) {
-    throw new Error('Produto nao encontrado.')
+    throw new Error('Produto não encontrado.')
   }
 
   const normalizedName = name?.trim() ?? ''
@@ -1072,17 +1468,17 @@ export async function updateProduct(productId, { name, institution, description,
 
   const normalizedInstitution = institution?.trim() ?? ''
   if (!normalizedInstitution) {
-    throw new Error('Informe a instituicao do produto.')
+    throw new Error('Informe a instituição do produto.')
   }
 
   const numericPrice = parseEurasValue(priceEuras)
   if (!Number.isFinite(numericPrice) || numericPrice < 0) {
-    throw new Error('Informe um valor valido para o produto.')
+    throw new Error('Informe um valor válido para o produto.')
   }
 
   const profileId = await resolvePartnerProfileIdByInstitution(normalizedInstitution)
   if (!profileId) {
-    throw new Error('Instituicao nao cadastrada como parceiro. Cadastre o parceiro antes de salvar o produto.')
+    throw new Error('Instituição não cadastrada como parceiro. Cadastre o parceiro antes de salvar o produto.')
   }
 
   const { error } = await euras
@@ -1099,6 +1495,8 @@ export async function updateProduct(productId, { name, institution, description,
   if (error) {
     throw error
   }
+
+  invalidateProductCaches()
 }
 
 export async function removeProduct(productId) {
@@ -1117,7 +1515,7 @@ export async function removeProduct(productId) {
   }
 
   if (!data) {
-    throw new Error('Produto nao encontrado.')
+    throw new Error('Produto não encontrado.')
   }
 
   const { error } = await euras
@@ -1128,4 +1526,6 @@ export async function removeProduct(productId) {
   if (error) {
     throw error
   }
+
+  invalidateProductCaches()
 }

@@ -72,7 +72,7 @@ export default function StudentCreate() {
 
       navigate('/alunos')
     } catch (error) {
-      console.info('Nao foi possivel cadastrar o aluno na base mockada.', error)
+      console.info('Não foi possível cadastrar o aluno na base mockada.', error)
       setFormError(getStudentApiErrorMessage(error))
     } finally {
       setIsSaving(false)
@@ -111,7 +111,7 @@ export default function StudentCreate() {
                 </label>
 
                 <label className="student-field">
-                  <span>Numero:</span>
+                  <span>Número:</span>
                   <input
                     type="text"
                     value={form.phone}

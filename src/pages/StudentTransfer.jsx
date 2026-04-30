@@ -54,7 +54,7 @@ export default function StudentTransfer() {
           return
         }
 
-        console.info('Nao foi possivel carregar o aluno para transferencia.', error)
+        console.info('Não foi possível carregar o aluno para transferencia.', error)
         setLoadError(getStudentApiErrorMessage(error))
       } finally {
         if (active) {
@@ -78,7 +78,7 @@ export default function StudentTransfer() {
     const transferAmount = balanceToCents(amount)
 
     if (!transferAmount) {
-      setSubmitError('Informe um valor valido para a transferencia.')
+      setSubmitError('Informe um valor válido para a transferencia.')
       return
     }
 
@@ -103,7 +103,7 @@ export default function StudentTransfer() {
         },
       })
     } catch (error) {
-      console.info('Nao foi possivel registrar o deposito na base mockada.', error)
+      console.info('Não foi possível registrar o deposito na base mockada.', error)
       setSubmitError(getStudentApiErrorMessage(error))
       setIsSubmitting(false)
     }

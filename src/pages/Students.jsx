@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import SidebarLayout from '../components/SidebarLayout'
+import { runWithRetries, withRequestTimeout } from '../lib/requestGuards'
 import { getStudentApiErrorMessage, listStudents } from '../lib/studentsApi'
 
 function SuccessIcon() {
@@ -58,6 +59,45 @@ function AddIcon() {
   )
 }
 
+const PREVIEW_STUDENTS_TARGET = 120
+const PREVIEW_CAMPUSES = ['MARACANAU', 'FORTALEZA', 'CAUCAIA', 'EUSEBIO', 'SOBRAL']
+const PREVIEW_COURSES = ['ADMINISTRACAO', 'INFORMATICA', 'ENFERMAGEM', 'DESIGN', 'MARKETING']
+
+function buildPreviewStudents(sourceStudents) {
+  if (!Array.isArray(sourceStudents) || sourceStudents.length === 0) {
+    return Array.from({ length: PREVIEW_STUDENTS_TARGET }).map((_, index) => ({
+      id: `preview-student-seed-${index + 1}`,
+      name: `ALUNO DEMO ${String(index + 1).padStart(3, '0')}`,
+      course: PREVIEW_COURSES[index % PREVIEW_COURSES.length],
+      campus: PREVIEW_CAMPUSES[index % PREVIEW_CAMPUSES.length],
+      previewOnly: true,
+    }))
+  }
+
+  const expanded = [...sourceStudents]
+  let cursor = 0
+
+  while (expanded.length < PREVIEW_STUDENTS_TARGET) {
+    const source = sourceStudents[cursor % sourceStudents.length]
+    const cloneNumber = expanded.length + 1
+    const campus = PREVIEW_CAMPUSES[cursor % PREVIEW_CAMPUSES.length]
+    const course = PREVIEW_COURSES[cursor % PREVIEW_COURSES.length]
+
+    expanded.push({
+      ...source,
+      id: `preview-student-${source.id}-${cloneNumber}`,
+      sourceId: source.id,
+      name: `${source.name} TURMA ${String(cloneNumber).padStart(3, '0')}`,
+      campus,
+      course,
+    })
+
+    cursor += 1
+  }
+
+  return expanded
+}
+
 export default function Students() {
   const navigate = useNavigate()
   const location = useLocation()
@@ -70,6 +110,7 @@ export default function Students() {
   const [selectedCampus, setSelectedCampus] = useState('TODAS')
   const [selectedCourse, setSelectedCourse] = useState('TODOS')
   const [transferSuccess, setTransferSuccess] = useState(() => location.state?.transferSuccess ?? null)
+  const [reloadNonce, setReloadNonce] = useState(0)
 
   useEffect(() => {
     let active = true
@@ -79,7 +120,13 @@ export default function Students() {
       setLoadError('')
 
       try {
-        const nextStudents = await listStudents()
+        const nextStudents = await runWithRetries(
+          () =>
+            withRequestTimeout(listStudents(), {
+              message: 'Tempo limite ao carregar alunos. Tente novamente.',
+            }),
+          { attempts: 2 },
+        )
 
         if (!active) {
           return
@@ -91,7 +138,7 @@ export default function Students() {
           return
         }
 
-        console.info('Nao foi possivel carregar os alunos mockados.', error)
+        console.info('Não foi possível carregar os alunos no Supabase.', error)
         setLoadError(getStudentApiErrorMessage(error))
       } finally {
         if (active) {
@@ -105,7 +152,7 @@ export default function Students() {
     return () => {
       active = false
     }
-  }, [])
+  }, [reloadNonce])
 
   useEffect(() => {
     if (!showFilters) {
@@ -128,20 +175,22 @@ export default function Students() {
     }
   }, [location.pathname, location.state, navigate])
 
+  const previewStudents = useMemo(() => buildPreviewStudents(students), [students])
+
   const campusOptions = useMemo(
-    () => ['TODAS', ...new Set(students.map((student) => student.campus))],
-    [students],
+    () => ['TODAS', ...new Set(previewStudents.map((student) => student.campus))],
+    [previewStudents],
   )
 
   const courseOptions = useMemo(
-    () => ['TODOS', ...new Set(students.map((student) => student.course))],
-    [students],
+    () => ['TODOS', ...new Set(previewStudents.map((student) => student.course))],
+    [previewStudents],
   )
 
   const filteredStudents = useMemo(() => {
     const normalizedSearch = searchTerm.trim().toUpperCase()
 
-    return students.filter((student) => {
+    return previewStudents.filter((student) => {
       const matchesSearch =
         !normalizedSearch ||
         student.name.includes(normalizedSearch) ||
@@ -153,7 +202,7 @@ export default function Students() {
 
       return matchesSearch && matchesCampus && matchesCourse
     })
-  }, [searchTerm, selectedCampus, selectedCourse, students])
+  }, [previewStudents, searchTerm, selectedCampus, selectedCourse])
 
   return (
     <SidebarLayout>
@@ -234,7 +283,14 @@ export default function Students() {
           <div className="students-table-body">
             {loadingStudents ? <div className="students-empty-state">Carregando alunos...</div> : null}
 
-            {loadError && !loadingStudents ? <div className="students-empty-state">{loadError}</div> : null}
+            {loadError && !loadingStudents ? (
+              <div className="students-empty-state students-empty-state-with-action">
+                <p>{loadError}</p>
+                <button type="button" className="data-retry-button" onClick={() => setReloadNonce((current) => current + 1)}>
+                  Tentar novamente
+                </button>
+              </div>
+            ) : null}
 
             {!loadingStudents && !loadError
               ? filteredStudents.map((student) => (
@@ -242,7 +298,11 @@ export default function Students() {
                 type="button"
                 className="students-row"
                 key={student.id}
-                onClick={() => navigate(`/alunos/${student.id}`)}
+                onClick={() => {
+                  if (!student.previewOnly) {
+                    navigate(`/alunos/${student.sourceId ?? student.id}`)
+                  }
+                }}
               >
                 <span className="students-name">{student.name}</span>
                 <span className="students-course">{student.course}</span>

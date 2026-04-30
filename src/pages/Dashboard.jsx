@@ -1,18 +1,26 @@
 import SidebarLayout from '../components/SidebarLayout'
 
 export default function Dashboard() {
-  const monthlyStudentsBars = [500, 780, 940, 760, 640, 790, 480, 0, 0, 0, 0, 0]
-  const monthlySentBars = [560, 850, 1020, 880, 740, 680, 920, 0, 0, 0, 0, 0]
+  const monthlyStudentsBars = [610, 780, 940, 760, 640, 790, 880, 920, 970, 1010, 1080, 1130]
+  const monthlySentBars = [700, 850, 1020, 880, 740, 820, 980, 1040, 1110, 1170, 1240, 1320]
   const monthLabels = ['JAN', 'FEV', 'MAR', 'ABR', 'MAI', 'JUN', 'JUL', 'AGO', 'SET', 'OUT', 'NOV', 'DEZ']
 
   const topProducts = [
-    ['Feijoada Bom Sabor 33%', 'Restaurante Bom Sabor', '74'],
-    ['Hamburguer da Casa 50%', 'Restaurante Bom Sabor', '62'],
-    ['Bolsa 50%', 'Ceeds Cursos', '60'],
-    ['Corte Social', 'Roberto Barbearia', '51'],
-    ['Sombrancelha', 'Roberto Barbearia', '33'],
-    ['Barba', 'Roberto Barbearia', '27'],
-    ['Hidratacao', 'Roberto Barbearia', '11'],
+    ['Feijoada Bom Sabor 33%', 'Restaurante Bom Sabor', '214'],
+    ['Hamburguer da Casa 50%', 'Restaurante Bom Sabor', '198'],
+    ['Bolsa 50%', 'Ceeds Cursos', '194'],
+    ['Corte Social', 'Roberto Barbearia', '176'],
+    ['Sombrancelha', 'Roberto Barbearia', '162'],
+    ['Barba', 'Roberto Barbearia', '155'],
+    ['Hidratação', 'Roberto Barbearia', '142'],
+    ['Pilates Mensal', 'Studio D', '138'],
+    ['Consulta Básica', 'Odonto Center', '131'],
+    ['Kit Material Escolar', 'Ceeds Maracanaú', '122'],
+    ['Limpeza de Pele', 'Studio D', '119'],
+    ['Avaliação Física', 'Centro Fit+', '113'],
+    ['Plano Inglês Básico', 'Ceeds Fortaleza', '108'],
+    ['Curso de Informática', 'Ceeds Maracanaú', '102'],
+    ['Exame de Vista', 'Ótica Brasil', '98'],
   ]
 
   return (
@@ -21,17 +29,17 @@ export default function Dashboard() {
         <article className="metric-card">
           <h3>Euras ativas</h3>
           <p>
-            <span className="metric-gold">&lt;</span> 2.034<span className="small-number">,00</span>
+            <span className="metric-gold">&lt;</span> 92.814<span className="small-number">,00</span>
           </p>
         </article>
         <article className="metric-card">
           <h3>Alunos cadastrados</h3>
-          <p>1.033</p>
+          <p>14.362</p>
         </article>
         <article className="metric-card">
-          <h3>Avaliacao do app</h3>
+          <h3>Avaliação do app</h3>
           <p>
-            <span className="metric-gold">★</span> 8,7
+            <span className="metric-gold">*</span> 8,9
           </p>
         </article>
       </div>
@@ -65,11 +73,11 @@ export default function Dashboard() {
                   <div className="bar-track">
                     <span
                       className="bar gold"
-                      style={{ height: `${(monthlyStudentsBars[index] / 1050) * 100}%` }}
+                      style={{ height: `${(monthlyStudentsBars[index] / 1320) * 100}%` }}
                     ></span>
                     <span
                       className="bar black"
-                      style={{ height: `${(monthlySentBars[index] / 1050) * 100}%` }}
+                      style={{ height: `${(monthlySentBars[index] / 1320) * 100}%` }}
                     ></span>
                   </div>
                   <span className="bar-label">{month}</span>
@@ -81,10 +89,10 @@ export default function Dashboard() {
 
         <article className="panel-card donut-card">
           <h3>Percentual de alunos que usaram Euras</h3>
-          <div className="donut-shell" aria-label="60 por cento">
-            <div className="donut-hole">60%</div>
+          <div className="donut-shell" aria-label="78 por cento">
+            <div className="donut-hole">78%</div>
           </div>
-          <p>40% dos alunos ainda nao resgataram nenhum produto usando Euras</p>
+          <p>22% dos alunos ainda não resgataram nenhum produto usando Euras</p>
         </article>
       </div>
 
@@ -101,7 +109,7 @@ export default function Dashboard() {
           </thead>
           <tbody>
             {topProducts.map(([product, partner, redemptions], index) => (
-              <tr key={product}>
+              <tr key={`${product}-${partner}-${index}`}>
                 <td>{index + 1}</td>
                 <td>{product}</td>
                 <td>{partner}</td>

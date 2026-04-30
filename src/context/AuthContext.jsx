@@ -1,9 +1,38 @@
 /* eslint-disable react-refresh/only-export-components */
 import { createContext, useContext, useEffect, useState } from 'react'
+import { normalizeRole } from '../lib/authRoles'
+import { isTransientRequestError, runWithRetries, withRequestTimeout } from '../lib/requestGuards'
 import { ensureFreshSession, supabase } from '../lib/supabase'
 
 const AuthContext = createContext(null)
 const euras = supabase.schema('euras')
+const PROFILE_COLUMNS = 'id, nome_completo, email, telefone, campus, url_avatar, papel'
+const PROFILE_COLUMNS_WITH_AUTH = `${PROFILE_COLUMNS}, auth_user_id`
+const AUTH_BOOTSTRAP_TIMEOUT_MS = 12000
+const PROFILE_LOAD_TIMEOUT_MS = 10000
+const SIGN_IN_TIMEOUT_MS = 12000
+
+async function runGuardedAuthTask(
+  task,
+  {
+    timeoutMs = AUTH_BOOTSTRAP_TIMEOUT_MS,
+    timeoutMessage = 'Tempo limite ao validar sua sessão. Tente novamente.',
+    attempts = 2,
+  } = {},
+) {
+  return runWithRetries(
+    () =>
+      withRequestTimeout(Promise.resolve().then(task), {
+        timeoutMs,
+        message: timeoutMessage,
+      }),
+    {
+      attempts,
+      retryDelayMs: 450,
+      shouldRetry: isTransientRequestError,
+    },
+  )
+}
 
 function isIrrecoverableSessionError(error) {
   const message = String(error?.message ?? '').toLowerCase()
@@ -16,17 +45,116 @@ function isIrrecoverableSessionError(error) {
   )
 }
 
-async function updateLastLoginIfAllowed(userId) {
-  if (!userId) return
+function isMissingColumnError(error, columnName) {
+  const joined = [
+    String(error?.message ?? ''),
+    String(error?.details ?? ''),
+    String(error?.hint ?? ''),
+  ]
+    .join(' ')
+    .toLowerCase()
+
+  return joined.includes(String(columnName ?? '').toLowerCase()) && joined.includes('column')
+}
+
+function normalizeEmail(value) {
+  return String(value ?? '').trim().toLowerCase()
+}
+
+async function loadProfileById(profileId, columns = PROFILE_COLUMNS) {
+  if (!profileId) return null
+
+  const response = await euras
+    .from('perfis')
+    .select(columns)
+    .eq('id', profileId)
+    .limit(1)
+    .maybeSingle()
+
+  if (response.error) {
+    throw response.error
+  }
+
+  return response.data ?? null
+}
+
+async function loadProfileByEmail(email) {
+  const normalizedEmail = normalizeEmail(email)
+  if (!normalizedEmail) return null
+
+  const exactResponse = await euras
+    .from('perfis')
+    .select(PROFILE_COLUMNS)
+    .eq('email', normalizedEmail)
+    .limit(1)
+    .maybeSingle()
+
+  if (exactResponse.error) {
+    throw exactResponse.error
+  }
+
+  if (exactResponse.data) {
+    return exactResponse.data
+  }
+
+  const fallbackResponse = await euras
+    .from('perfis')
+    .select(PROFILE_COLUMNS)
+    .ilike('email', normalizedEmail)
+    .limit(1)
+    .maybeSingle()
+
+  if (fallbackResponse.error) {
+    throw fallbackResponse.error
+  }
+
+  return fallbackResponse.data ?? null
+}
+
+async function loadAuthenticatedProfile(authUser) {
+  const authUserId = authUser?.id
+  const authUserEmail = normalizeEmail(authUser?.email)
+
+  if (!authUserId) return null
+
+  const { data, error } = await euras
+    .from('perfis')
+    .select(PROFILE_COLUMNS_WITH_AUTH)
+    .or(`id.eq.${authUserId},auth_user_id.eq.${authUserId}`)
+    .limit(1)
+    .maybeSingle()
+
+  if (error && isMissingColumnError(error, 'auth_user_id')) {
+    const legacyProfileById = await loadProfileById(authUserId)
+    if (legacyProfileById) {
+      return legacyProfileById
+    }
+
+    return loadProfileByEmail(authUserEmail)
+  }
+
+  if (error) {
+    throw error
+  }
+
+  if (data) {
+    return data
+  }
+
+  return loadProfileByEmail(authUserEmail)
+}
+
+async function updateLastLoginIfAllowed(profileId) {
+  if (!profileId) return
 
   const { error } = await euras
     .from('perfis')
     .update({ ultimo_login_em: new Date().toISOString() })
-    .eq('id', userId)
+    .eq('id', profileId)
 
   if (error) {
     console.info(
-      'Nao foi possivel atualizar euras.perfis.ultimo_login_em por RLS/permissao. Fluxo segue normalmente.',
+      'Não foi possível atualizar euras.perfis.ultimo_login_em por RLS/permissão. Fluxo segue normalmente.',
       error.message,
     )
   }
@@ -35,28 +163,109 @@ async function updateLastLoginIfAllowed(userId) {
 export function AuthProvider({ children }) {
   const [session, setSession] = useState(null)
   const [user, setUser] = useState(null)
+  const [profile, setProfile] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [profileLoading, setProfileLoading] = useState(true)
   const [authError, setAuthError] = useState('')
 
   useEffect(() => {
     let isMounted = true
     let refreshingOnForeground = false
 
+    async function syncProfileForUser(nextUser) {
+      if (!nextUser?.id) {
+        if (isMounted) {
+          setProfile(null)
+          setProfileLoading(false)
+        }
+        return null
+      }
+
+      if (isMounted) {
+        setProfileLoading(true)
+      }
+
+      try {
+        const nextProfile = await runGuardedAuthTask(() => loadAuthenticatedProfile(nextUser), {
+          timeoutMs: PROFILE_LOAD_TIMEOUT_MS,
+          timeoutMessage: 'Tempo limite ao carregar seu perfil. Tente novamente.',
+        })
+
+        if (!isMounted) return nextProfile
+
+        setProfile(nextProfile)
+
+        if (!nextProfile) {
+          setAuthError(
+            'Seu login foi autenticado, mas não encontramos um perfil associado. Contate o suporte.',
+          )
+        }
+
+        return nextProfile
+      } catch (error) {
+        if (!isMounted) return null
+
+        setProfile(null)
+        setAuthError(error?.message ?? 'Não foi possível carregar seu perfil.')
+        return null
+      } finally {
+        if (isMounted) {
+          setProfileLoading(false)
+        }
+      }
+    }
+
+    async function applySession(nextSession) {
+      if (!isMounted) return null
+
+      const nextUser = nextSession?.user ?? null
+      setSession(nextSession ?? null)
+      setUser(nextUser)
+      setAuthError('')
+
+      const nextProfile = await syncProfileForUser(nextUser)
+
+      if (isMounted) {
+        setLoading(false)
+      }
+
+      return nextProfile
+    }
+
     async function bootstrapSession() {
-      const { data, error } = await supabase.auth.getSession()
+      let sessionResponse = null
+
+      try {
+        sessionResponse = await runGuardedAuthTask(() => supabase.auth.getSession(), {
+          timeoutMessage: 'Tempo limite ao recuperar a sessão atual.',
+        })
+      } catch (error) {
+        if (!isMounted) return
+
+        setSession(null)
+        setUser(null)
+        setProfile(null)
+        setAuthError(error?.message ?? 'Não foi possível recuperar a sessão atual.')
+        setProfileLoading(false)
+        setLoading(false)
+        return
+      }
+
+      const { data, error } = sessionResponse ?? {}
 
       if (!isMounted) return
 
       if (error) {
         setSession(null)
         setUser(null)
-        setAuthError('Nao foi possivel recuperar a sessao atual.')
-      } else {
-        setSession(data.session ?? null)
-        setUser(data.session?.user ?? null)
+        setProfile(null)
+        setAuthError('Não foi possível recuperar a sessão atual.')
+        setProfileLoading(false)
+        setLoading(false)
+        return
       }
 
-      setLoading(false)
+      await applySession(data.session ?? null)
     }
 
     async function refreshSessionWhenForeground() {
@@ -72,8 +281,11 @@ export function AuthProvider({ children }) {
         const refreshedSession = await ensureFreshSession({ minimumValiditySeconds: 120 })
         if (!isMounted) return
 
-        setSession(refreshedSession)
-        setUser(refreshedSession.user ?? null)
+        // Mantém sessão e usuário sincronizados sem reacender loading global/perfil
+        // para evitar "flash" de tela ao alternar abas do navegador.
+        setSession(refreshedSession ?? null)
+        setUser(refreshedSession?.user ?? null)
+        setLoading(false)
         setAuthError('')
       } catch (error) {
         if (!isMounted) return
@@ -81,13 +293,13 @@ export function AuthProvider({ children }) {
         if (isIrrecoverableSessionError(error)) {
           setSession(null)
           setUser(null)
+          setProfile(null)
         }
 
-        setAuthError(error?.message ?? 'Nao foi possivel renovar a sessao.')
+        setProfileLoading(false)
+        setLoading(false)
+        setAuthError(error?.message ?? 'Não foi possível renovar a sessão.')
       } finally {
-        if (isMounted) {
-          setLoading(false)
-        }
         refreshingOnForeground = false
       }
     }
@@ -96,17 +308,27 @@ export function AuthProvider({ children }) {
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (event, nextSession) => {
-      if (!isMounted) return
+    } = supabase.auth.onAuthStateChange((event, nextSession) => {
+      window.setTimeout(async () => {
+        if (!isMounted) return
 
-      setSession(nextSession ?? null)
-      setUser(nextSession?.user ?? null)
-      setAuthError('')
-      setLoading(false)
+        if (event === 'INITIAL_SESSION') {
+          return
+        }
 
-      if (event === 'SIGNED_IN' && nextSession?.user?.id) {
-        await updateLastLoginIfAllowed(nextSession.user.id)
-      }
+        if (event === 'TOKEN_REFRESHED') {
+          setSession(nextSession ?? null)
+          setUser(nextSession?.user ?? null)
+          setLoading(false)
+          return
+        }
+
+        const resolvedProfile = await applySession(nextSession ?? null)
+
+        if (event === 'SIGNED_IN' && nextSession?.user?.id) {
+          await updateLastLoginIfAllowed(resolvedProfile?.id ?? nextSession.user.id)
+        }
+      }, 0)
     })
 
     const onFocus = () => {
@@ -132,33 +354,187 @@ export function AuthProvider({ children }) {
 
   const signInWithPassword = async ({ email, password }) => {
     setAuthError('')
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    })
-    return { data, error }
+
+    try {
+      const { data, error } = await runGuardedAuthTask(
+        () =>
+          supabase.auth.signInWithPassword({
+            email,
+            password,
+          }),
+        {
+          timeoutMs: SIGN_IN_TIMEOUT_MS,
+          timeoutMessage: 'Tempo limite ao tentar fazer login. Verifique sua conexão e tente novamente.',
+        },
+      )
+
+      return { data, error }
+    } catch (error) {
+      return { data: null, error }
+    }
   }
 
   const signInWithGoogle = async () => {
     setAuthError('')
-    const { data, error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: {
-        redirectTo: `${window.location.origin}/dashboard`,
-      },
-    })
-    return { data, error }
+
+    try {
+      const { data, error } = await runGuardedAuthTask(
+        () =>
+          supabase.auth.signInWithOAuth({
+            provider: 'google',
+            options: {
+              redirectTo: `${window.location.origin}/login`,
+            },
+          }),
+        {
+          timeoutMs: SIGN_IN_TIMEOUT_MS,
+          timeoutMessage:
+            'Tempo limite ao iniciar o login com Google. Verifique sua conexão e tente novamente.',
+        },
+      )
+
+      return { data, error }
+    } catch (error) {
+      return { data: null, error }
+    }
   }
 
   const resetPasswordForEmail = async (email) => {
-    const { data, error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: window.location.origin,
-    })
-    return { data, error }
+    try {
+      const { data, error } = await runGuardedAuthTask(
+        () =>
+          supabase.auth.resetPasswordForEmail(email, {
+            redirectTo: window.location.origin,
+          }),
+        {
+          timeoutMessage:
+            'Tempo limite ao solicitar redefinição de senha. Verifique sua conexão e tente novamente.',
+        },
+      )
+
+      return { data, error }
+    } catch (error) {
+      return { data: null, error }
+    }
+  }
+
+  const refreshProfile = async () => {
+    if (!user?.id) {
+      setProfile(null)
+      return null
+    }
+
+    setProfileLoading(true)
+    setAuthError('')
+
+    try {
+      const nextProfile = await runGuardedAuthTask(() => loadAuthenticatedProfile(user), {
+        timeoutMs: PROFILE_LOAD_TIMEOUT_MS,
+        timeoutMessage: 'Tempo limite ao atualizar seu perfil. Tente novamente.',
+      })
+      setProfile(nextProfile)
+      return nextProfile
+    } catch (error) {
+      setProfile(null)
+      setAuthError(error?.message ?? 'Não foi possível atualizar seu perfil.')
+      throw error
+    } finally {
+      setProfileLoading(false)
+    }
+  }
+
+  const updateProfile = async ({ name, phone }) => {
+    if (!user?.id) {
+      throw new Error('Sessão expirada. Faça login novamente.')
+    }
+
+    const normalizedName = String(name ?? '').trim()
+    const normalizedPhone = String(phone ?? '').trim()
+
+    if (!normalizedName) {
+      throw new Error('Informe o nome de usuário.')
+    }
+
+    setProfileLoading(true)
+    setAuthError('')
+
+    const payload = {
+      nome_completo: normalizedName,
+      telefone: normalizedPhone,
+    }
+
+    try {
+      const targetProfileId = profile?.id ?? user.id
+      let response = await euras
+        .from('perfis')
+        .update(payload)
+        .eq('id', targetProfileId)
+        .select(PROFILE_COLUMNS)
+        .maybeSingle()
+
+      if (response.error) {
+        throw response.error
+      }
+
+      if (!response.data && targetProfileId !== user.id) {
+        response = await euras
+          .from('perfis')
+          .update(payload)
+          .eq('id', user.id)
+          .select(PROFILE_COLUMNS)
+          .maybeSingle()
+
+        if (response.error) {
+          throw response.error
+        }
+      }
+
+      if (!response.data) {
+        const fallbackByAuthId = await euras
+          .from('perfis')
+          .update(payload)
+          .eq('auth_user_id', user.id)
+          .select(PROFILE_COLUMNS)
+          .maybeSingle()
+
+        if (fallbackByAuthId.error && !isMissingColumnError(fallbackByAuthId.error, 'auth_user_id')) {
+          throw fallbackByAuthId.error
+        }
+
+        response = fallbackByAuthId.error ? response : fallbackByAuthId
+      }
+
+      if (!response.data) {
+        throw new Error('Perfil não encontrado.')
+      }
+
+      setProfile(response.data)
+
+      const { data: updatedAuthData, error: updateAuthError } = await supabase.auth.updateUser({
+        data: {
+          ...(user?.user_metadata ?? {}),
+          name: normalizedName,
+          full_name: normalizedName,
+        },
+      })
+
+      if (updateAuthError) {
+        console.info('Não foi possível atualizar os metadados do usuário no Auth.', updateAuthError)
+      } else if (updatedAuthData?.user) {
+        setUser(updatedAuthData.user)
+      }
+
+      return response.data
+    } catch (error) {
+      setAuthError(error?.message ?? 'Não foi possível atualizar seu perfil.')
+      throw error
+    } finally {
+      setProfileLoading(false)
+    }
   }
 
   const createTimeoutError = () => {
-    const error = new Error('Tempo limite para encerrar a sessao excedido.')
+    const error = new Error('Tempo limite para encerrar a sessão excedido.')
     error.name = 'AuthSignOutTimeoutError'
     return error
   }
@@ -168,6 +544,8 @@ export function AuthProvider({ children }) {
 
     setSession(null)
     setUser(null)
+    setProfile(null)
+    setProfileLoading(false)
     setLoading(false)
     setAuthError('')
 
@@ -188,11 +566,16 @@ export function AuthProvider({ children }) {
   const value = {
     session,
     user,
+    profile,
+    role: normalizeRole(profile?.papel),
     loading,
+    profileLoading,
     authError,
     signInWithPassword,
     signInWithGoogle,
     resetPasswordForEmail,
+    refreshProfile,
+    updateProfile,
     signOut,
   }
 
