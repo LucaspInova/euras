@@ -95,10 +95,24 @@ export default function PartnerCreate() {
   }
 
   const handleSubmit = async () => {
+    if (isSaving) {
+      return
+    }
+
     setFormError('')
 
     if (!form.institution.trim()) {
       setFormError('Informe o nome da instituição.')
+      return
+    }
+
+    if (!form.user.trim()) {
+      setFormError('Informe o nome do usuario responsavel.')
+      return
+    }
+
+    if (!form.phone.trim()) {
+      setFormError('Informe o numero do parceiro.')
       return
     }
 

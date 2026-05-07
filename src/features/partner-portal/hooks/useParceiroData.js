@@ -1,85 +1,446 @@
-export async function fetchParceiro(supabase) {
-  const { data, error } = await supabase
+const PARTNER_USERNAME_COLUMNS = [
+  'usuario_responsavel_nome',
+  'nome_usuario',
+  'nome',
+  'username',
+]
+const PROFILE_COLUMNS_WITH_AUTH = 'id, auth_user_id, nome_completo, telefone, email, campus, papel, ativo'
+const PROFILE_COLUMNS = 'id, nome_completo, telefone, email, campus, papel, ativo'
+
+function isMissingColumnError(error, columnName) {
+  const joined = [
+    String(error?.message ?? ''),
+    String(error?.details ?? ''),
+    String(error?.hint ?? ''),
+  ]
+    .join(' ')
+    .toLowerCase()
+
+  return joined.includes('column') && joined.includes(String(columnName).toLowerCase())
+}
+
+function mapPartnerRow(partnerRow) {
+  if (!partnerRow) return null
+
+  const username = PARTNER_USERNAME_COLUMNS
+    .map((column) => partnerRow?.[column])
+    .find((value) => typeof value === 'string' && value.trim()) ?? ''
+
+  return {
+    ...partnerRow,
+    usuario_responsavel_nome: username,
+  }
+}
+
+function mapProfileAsPartnerFallback(profile) {
+  if (!profile) return null
+
+  const fallbackName = String(profile.nome_completo ?? '').trim() || 'Parceiro'
+
+  return mapPartnerRow({
+    id: null,
+    perfil_parceiro_id: profile.id,
+    nome_instituicao: fallbackName,
+    usuario_responsavel_nome: fallbackName,
+    telefone: profile.telefone ?? null,
+    email: profile.email ?? null,
+    campus: profile.campus ?? null,
+    ativo: profile.ativo ?? true,
+  })
+}
+
+function normalizeNullableText(value) {
+  const normalized = String(value ?? '').trim()
+  return normalized || null
+}
+
+async function runProfileQuery(supabase, buildQuery) {
+  let response = await buildQuery(PROFILE_COLUMNS_WITH_AUTH)
+
+  if (response.error && isMissingColumnError(response.error, 'auth_user_id')) {
+    response = await buildQuery(PROFILE_COLUMNS)
+  }
+
+  return response
+}
+
+async function resolveLoggedProfileByAuthUserId(supabase) {
+  const { data: authData, error: authError } = await supabase.auth.getUser()
+  if (authError) {
+    throw authError
+  }
+
+  const authUserId = authData?.user?.id ?? null
+  if (!authUserId) {
+    throw new Error('Sessao expirada. Faca login novamente.')
+  }
+
+  const profileQuery = await supabase
+    .schema('euras')
+    .from('perfis')
+    .select(PROFILE_COLUMNS_WITH_AUTH)
+    .eq('auth_user_id', authUserId)
+    .eq('papel', 'parceiro')
+    .eq('ativo', true)
+    .limit(1)
+    .maybeSingle()
+
+  if (profileQuery.error && !isMissingColumnError(profileQuery.error, 'auth_user_id')) {
+    throw profileQuery.error
+  }
+
+  let profile = profileQuery.data ?? null
+
+  if (!profile) {
+    const profileByIdQuery = await runProfileQuery(supabase, (columns) =>
+      supabase
+        .schema('euras')
+        .from('perfis')
+        .select(columns)
+        .eq('id', authUserId)
+        .eq('papel', 'parceiro')
+        .eq('ativo', true)
+        .limit(1)
+        .maybeSingle(),
+    )
+
+    if (profileByIdQuery.error) {
+      throw profileByIdQuery.error
+    }
+
+    profile = profileByIdQuery.data ?? null
+  }
+
+  const authEmail = String(authData?.user?.email ?? '').trim().toLowerCase()
+  if (!profile && authEmail) {
+    const profileByEmailQuery = await runProfileQuery(supabase, (columns) =>
+      supabase
+        .schema('euras')
+        .from('perfis')
+        .select(columns)
+        .ilike('email', authEmail)
+        .eq('papel', 'parceiro')
+        .eq('ativo', true)
+        .limit(1)
+        .maybeSingle(),
+    )
+
+    if (profileByEmailQuery.error) {
+      throw profileByEmailQuery.error
+    }
+
+    profile = profileByEmailQuery.data ?? null
+  }
+
+  if (!profile) {
+    throw new Error('Perfil do parceiro nao encontrado. Faca login novamente.')
+  }
+
+  return {
+    authUserId,
+    profile,
+  }
+}
+
+async function resolveLoggedPartnerProfile(supabase) {
+  const { authUserId, profile } = await resolveLoggedProfileByAuthUserId(supabase)
+  const partnerQuery = await supabase
     .schema('euras')
     .from('parceiros')
-    .select('*, perfil:perfil_parceiro_id(*)')
-    .single()
+    .select('*')
+    .eq('perfil_parceiro_id', profile.id)
+    .limit(1)
+    .maybeSingle()
 
-  return { data, error }
+  if (partnerQuery.error) {
+    throw partnerQuery.error
+  }
+
+  const partner = mapPartnerRow(partnerQuery.data)
+  const partnerForDisplay = partner ?? mapProfileAsPartnerFallback(profile)
+
+  return {
+    authUserId,
+    profile,
+    partner,
+    data: {
+      ...(partnerForDisplay ?? {}),
+      perfil_id: profile.id,
+      auth_user_id: profile.auth_user_id,
+      nome_completo: profile.nome_completo ?? partnerForDisplay?.usuario_responsavel_nome ?? '',
+      telefone: profile.telefone ?? partnerForDisplay?.telefone ?? null,
+      email: profile.email ?? partnerForDisplay?.email ?? null,
+      campus: profile.campus ?? partnerForDisplay?.campus ?? null,
+    },
+  }
 }
 
-export async function fetchResgatesPendentes(supabase, limit = null) {
-  let query = supabase
+async function findPartnerByAuthUserId(supabase, authUserId) {
+  if (!authUserId) {
+    return null
+  }
+
+  const relationCandidates = ['user_id', 'auth_user_id']
+
+  for (const relationColumn of relationCandidates) {
+    const partnerQuery = await supabase
+      .schema('euras')
+      .from('parceiros')
+      .select('*')
+      .eq(relationColumn, authUserId)
+      .limit(1)
+      .maybeSingle()
+
+    if (!partnerQuery.error) {
+      return mapPartnerRow(partnerQuery.data)
+    }
+
+    if (isMissingColumnError(partnerQuery.error, relationColumn)) {
+      continue
+    }
+
+    throw partnerQuery.error
+  }
+
+  return null
+}
+
+async function findPartnerByProfileId(supabase, profileId) {
+  if (!profileId) {
+    return null
+  }
+
+  const partnerQuery = await supabase
     .schema('euras')
-    .from('resgates')
-    .select(`
-      id,
-      valor_euras,
-      status,
-      criado_em,
-      aluno:aluno_id ( nome_completo ),
-      produto:produto_id ( titulo )
-    `)
-    .eq('status', 'pendente')
-    .order('criado_em', { ascending: false })
+    .from('parceiros')
+    .select('*')
+    .eq('perfil_parceiro_id', profileId)
+    .limit(1)
+    .maybeSingle()
 
-  if (limit) query = query.limit(limit)
+  if (partnerQuery.error) {
+    throw partnerQuery.error
+  }
 
-  const { data, error } = await query
-  return { data, error }
+  return mapPartnerRow(partnerQuery.data)
 }
 
-export async function fetchResgates(supabase, filtroStatus = null) {
-  let query = supabase
+async function findProfileFallbackByProfileId(supabase, profileId) {
+  if (!profileId) {
+    return null
+  }
+
+  const profileQuery = await supabase
     .schema('euras')
-    .from('resgates')
-    .select(`
-      id,
-      valor_euras,
-      status,
-      criado_em,
-      confirmado_em,
-      aluno:aluno_id ( nome_completo ),
-      produto:produto_id ( titulo )
-    `)
-    .order('criado_em', { ascending: false })
+    .from('perfis')
+    .select('id, auth_user_id, nome_completo, telefone, email, campus, ativo')
+    .eq('id', profileId)
+    .limit(1)
+    .maybeSingle()
 
-  if (filtroStatus) query = query.eq('status', filtroStatus)
+  if (profileQuery.error) {
+    throw profileQuery.error
+  }
 
-  const { data, error } = await query
-  return { data, error }
+  return mapProfileAsPartnerFallback(profileQuery.data)
 }
 
-export async function atualizarStatusResgate(supabase, resgateId, novoStatus, userId) {
+async function resolveLoggedPartnerContext(supabase) {
+  const { data: authData, error: authError } = await supabase.auth.getUser()
+  if (authError) {
+    throw authError
+  }
+
+  const authUserId = authData?.user?.id ?? null
+  if (!authUserId) {
+    return { profileId: null, partner: null, partnerId: null }
+  }
+
+  const partnerByAuthUser = await findPartnerByAuthUserId(supabase, authUserId)
+  if (partnerByAuthUser?.perfil_parceiro_id) {
+    return {
+      profileId: partnerByAuthUser.perfil_parceiro_id,
+      partner: partnerByAuthUser,
+      partnerId: partnerByAuthUser.perfil_parceiro_id,
+    }
+  }
+
+  const { profile } = await resolveLoggedProfileByAuthUserId(supabase)
+  const profileId = profile?.id ?? null
+  if (!profileId) {
+    return { profileId: null, partner: partnerByAuthUser, partnerId: null }
+  }
+
+  const partnerByProfile = partnerByAuthUser ?? (await findPartnerByProfileId(supabase, profileId))
+
+  return {
+    profileId,
+    partner: partnerByProfile,
+    partnerId: profileId,
+  }
+}
+
+async function resolveLoggedPartnerWithDetails(supabase) {
+  const context = await resolveLoggedPartnerContext(supabase)
+  if (!context.profileId) return context
+
+  if (context.partner) {
+    return context
+  }
+
+  const partner = await findPartnerByProfileId(supabase, context.profileId)
+  return {
+    profileId: context.profileId,
+    partner: partner ?? (await findProfileFallbackByProfileId(supabase, context.profileId)),
+    // In euras.resgates, parceiro_id references euras.perfis.id.
+    partnerId: context.profileId,
+  }
+}
+
+export async function fetchParceiro(supabase) {
+  try {
+    const context = await resolveLoggedPartnerWithDetails(supabase)
+    return { data: context.partner ?? null, error: null }
+  } catch (error) {
+    return { data: null, error }
+  }
+}
+
+export async function fetchPerfilParceiroAtual(supabase) {
+  try {
+    const context = await resolveLoggedPartnerProfile(supabase)
+    return { data: context.data, error: null }
+  } catch (error) {
+    return { data: null, error }
+  }
+}
+
+export async function fetchResgatesPendentes(supabase, parceiroProfileId = null, limit = null) {
+  void parceiroProfileId
+  try {
+    const context = await resolveLoggedPartnerContext(supabase)
+    if (!context.partnerId) {
+      return { data: [], error: null }
+    }
+
+    let query = supabase
+      .schema('euras')
+      .from('resgates')
+      .select(`
+        id,
+        valor_euras,
+        criado_em,
+        status,
+        aluno:aluno_id ( nome_completo ),
+        produto:produto_id ( titulo )
+      `)
+      .eq('parceiro_id', context.partnerId)
+      .eq('status', 'pendente')
+      .order('criado_em', { ascending: false })
+
+    if (limit) query = query.limit(limit)
+
+    const { data, error } = await query
+    return { data, error }
+  } catch (error) {
+    return { data: null, error }
+  }
+}
+
+export async function fetchResgates(supabase, parceiroProfileId = null, filtroStatus = null) {
+  void parceiroProfileId
+  try {
+    const context = await resolveLoggedPartnerContext(supabase)
+    if (!context.partnerId) {
+      return { data: [], error: null }
+    }
+
+    let query = supabase
+      .schema('euras')
+      .from('resgates')
+      .select(`
+        id,
+        valor_euras,
+        criado_em,
+        status,
+        motivo_recusa,
+        aluno:aluno_id ( nome_completo ),
+        produto:produto_id ( titulo )
+      `)
+      .eq('parceiro_id', context.partnerId)
+      .order('criado_em', { ascending: false })
+
+    if (filtroStatus) {
+      query = query.eq('status', filtroStatus)
+    }
+
+    const { data, error } = await query
+    return { data, error }
+  } catch (error) {
+    return { data: null, error }
+  }
+}
+
+export async function fetchAtividadesParceiro(supabase, parceiroProfileId = null, limit = null) {
+  void parceiroProfileId
+  try {
+    const context = await resolveLoggedPartnerContext(supabase)
+    if (!context.partnerId) {
+      return { data: [], error: null }
+    }
+
+    let query = supabase
+      .schema('euras')
+      .from('resgates')
+      .select(`
+        id,
+        valor_euras,
+        criado_em,
+        status,
+        aluno:aluno_id ( nome_completo ),
+        produto:produto_id ( titulo )
+      `)
+      .eq('parceiro_id', context.partnerId)
+      .order('criado_em', { ascending: false })
+
+    if (limit) query = query.limit(limit)
+
+    const { data, error } = await query
+    return { data, error }
+  } catch (error) {
+    return { data: null, error }
+  }
+}
+
+// Mantida por compatibilidade com outros arquivos
+export async function fetchAtividadesConcedidas(supabase, parceiroProfileId, limit = null) {
+  return fetchAtividadesParceiro(supabase, parceiroProfileId, limit)
+}
+
+export async function atualizarStatusResgate(supabase, resgateId, novoStatus, userId, motivo = null) {
+  const context = await resolveLoggedPartnerContext(supabase)
+  const confirmedByProfileId = context.profileId ?? userId ?? null
+
+  if (!confirmedByProfileId) {
+    return { data: null, error: new Error('Sessao expirada. Faca login novamente.') }
+  }
+
+  const campos = {
+    status: novoStatus,
+    confirmado_por: confirmedByProfileId,
+    confirmado_em: new Date().toISOString(),
+  }
+
+  if (novoStatus === 'cancelado') {
+    campos.motivo_recusa = String(motivo ?? '').trim()
+  }
+
   const { data, error } = await supabase
     .schema('euras')
     .from('resgates')
-    .update({
-      status: novoStatus,
-      confirmado_por: userId,
-      confirmado_em: new Date().toISOString(),
-    })
+    .update(campos)
     .eq('id', resgateId)
 
-  return { data, error }
-}
-
-export async function fetchAtividadesConcedidas(supabase, limit = null) {
-  let query = supabase
-    .schema('euras')
-    .from('atividades_concedidas')
-    .select(`
-      id,
-      valor_euras,
-      titulo_snapshot,
-      concedido_em,
-      aluno:aluno_id ( nome_completo )
-    `)
-    .order('concedido_em', { ascending: false })
-
-  if (limit) query = query.limit(limit)
-
-  const { data, error } = await query
   return { data, error }
 }
 
@@ -97,14 +458,60 @@ export async function fetchProdutos(supabase, apenasAtivos = false) {
 }
 
 export async function criarProduto(supabase, produto) {
-  const { data, error } = await supabase
-    .schema('euras')
-    .from('produtos')
-    .insert(produto)
-    .select()
-    .single()
+  const basePayload = { ...produto }
+  const partnerProfileId = basePayload.perfil_parceiro_id
+  const partnerRowId = basePayload.parceiro_id
 
-  return { data, error }
+  delete basePayload.perfil_parceiro_id
+  delete basePayload.parceiro_id
+
+  const payloadCandidates = []
+
+  if (partnerProfileId) {
+    payloadCandidates.push({
+      ...basePayload,
+      perfil_parceiro_id: partnerProfileId,
+    })
+  }
+
+  if (partnerRowId) {
+    payloadCandidates.push({
+      ...basePayload,
+      parceiro_id: partnerRowId,
+    })
+  }
+
+  if (payloadCandidates.length === 0) {
+    payloadCandidates.push(basePayload)
+  }
+
+  let fallbackError = null
+
+  for (const payload of payloadCandidates) {
+    const { data, error } = await supabase
+      .schema('euras')
+      .from('produtos')
+      .insert(payload)
+      .select()
+      .single()
+
+    if (!error) {
+      return { data, error: null }
+    }
+
+    const attemptedPartnerColumn = Object.keys(payload).find((key) =>
+      ['perfil_parceiro_id', 'parceiro_id'].includes(key),
+    )
+
+    if (attemptedPartnerColumn && isMissingColumnError(error, attemptedPartnerColumn)) {
+      fallbackError = error
+      continue
+    }
+
+    return { data: null, error }
+  }
+
+  return { data: null, error: fallbackError }
 }
 
 export async function atualizarProduto(supabase, produtoId, campos) {
@@ -114,21 +521,79 @@ export async function atualizarProduto(supabase, produtoId, campos) {
     .update(campos)
     .eq('id', produtoId)
     .select()
-    .single()
+    .maybeSingle()
 
   return { data, error }
 }
 
-export async function atualizarPerfil(supabase, parceiroId, campos) {
-  const { data, error } = await supabase
-    .schema('euras')
-    .from('parceiros')
-    .update(campos)
-    .eq('id', parceiroId)
-    .select()
-    .single()
+export async function atualizarPerfil(supabase, campos) {
+  try {
+    const { profile, partner } = await resolveLoggedPartnerProfile(supabase)
+    const normalizedName = String(
+      campos?.nome ?? campos?.usuario_responsavel_nome ?? profile?.nome_completo ?? '',
+    ).trim()
 
-  return { data, error }
+    if (!normalizedName) {
+      throw new Error('Informe o nome de usuario.')
+    }
+
+    const normalizedPhone = normalizeNullableText(campos?.telefone)
+    const normalizedCampus = normalizeNullableText(campos?.campus ?? profile?.campus)
+
+    const profileUpdateQuery = await supabase
+      .schema('euras')
+      .from('perfis')
+      .update({
+        nome_completo: normalizedName,
+        telefone: normalizedPhone,
+        campus: normalizedCampus,
+      })
+      .eq('id', profile.id)
+      .select('id')
+      .limit(1)
+      .maybeSingle()
+
+    if (profileUpdateQuery.error) {
+      throw profileUpdateQuery.error
+    }
+
+    if (!profileUpdateQuery.data?.id) {
+      throw new Error('Perfil do parceiro nao encontrado para atualizacao.')
+    }
+
+    const partnerInstitutionName =
+      String(campos?.nome_instituicao ?? partner?.nome_instituicao ?? normalizedName).trim() ||
+      normalizedName
+
+    if (partner) {
+      const partnerUpdateQuery = await supabase
+        .schema('euras')
+        .from('parceiros')
+        .update({
+          nome_instituicao: partnerInstitutionName,
+          usuario_responsavel_nome: normalizedName,
+          telefone: normalizedPhone,
+          campus: normalizedCampus,
+        })
+        .eq('perfil_parceiro_id', profile.id)
+        .select('id')
+        .limit(1)
+        .maybeSingle()
+
+      if (partnerUpdateQuery.error) {
+        throw partnerUpdateQuery.error
+      }
+
+      if (!partnerUpdateQuery.data?.id) {
+        throw new Error('Parceiro nao encontrado para atualizacao.')
+      }
+    }
+
+    const refreshed = await resolveLoggedPartnerProfile(supabase)
+    return { data: refreshed.data, error: null }
+  } catch (error) {
+    return { data: null, error }
+  }
 }
 
 export function getParceiroDataErrorMessage(error) {
@@ -147,7 +612,7 @@ export function getParceiroDataErrorMessage(error) {
     return 'Conexão com o banco demorou demais. Tente novamente em instantes.'
   }
 
-  if (normalized.includes('sessao expirada')) {
+  if (normalized.includes('sessao expirada') || normalized.includes('sessao invalida')) {
     return 'Sua sessão expirou. Faça login novamente.'
   }
 
@@ -157,4 +622,3 @@ export function getParceiroDataErrorMessage(error) {
 
   return message
 }
-

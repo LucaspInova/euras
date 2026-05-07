@@ -40,6 +40,7 @@ function isIrrecoverableSessionError(error) {
   return (
     message.includes('refresh token') ||
     message.includes('invalid refresh token') ||
+    message.includes('session not found') ||
     message.includes('session missing') ||
     message.includes('invalid_grant')
   )
@@ -265,7 +266,26 @@ export function AuthProvider({ children }) {
         return
       }
 
-      await applySession(data.session ?? null)
+      let verifiedSession = data.session ?? null
+
+      if (verifiedSession) {
+        try {
+          verifiedSession = await ensureFreshSession({
+            minimumValiditySeconds: 120,
+            verifyServerSession: true,
+          })
+        } catch (verifyError) {
+          setSession(null)
+          setUser(null)
+          setProfile(null)
+          setAuthError(verifyError?.message ?? 'Sessao expirada. Faca login novamente.')
+          setProfileLoading(false)
+          setLoading(false)
+          return
+        }
+      }
+
+      await applySession(verifiedSession)
     }
 
     async function refreshSessionWhenForeground() {
@@ -278,7 +298,10 @@ export function AuthProvider({ children }) {
       refreshingOnForeground = true
 
       try {
-        const refreshedSession = await ensureFreshSession({ minimumValiditySeconds: 120 })
+        const refreshedSession = await ensureFreshSession({
+          minimumValiditySeconds: 120,
+          verifyServerSession: true,
+        })
         if (!isMounted) return
 
         // Mantém sessão e usuário sincronizados sem reacender loading global/perfil

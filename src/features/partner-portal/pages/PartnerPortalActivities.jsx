@@ -52,9 +52,16 @@ function normalizeSearchText(value) {
 }
 
 function normalizeStatusFilter(statusFilter) {
-  if (statusFilter === 'approved') return 'aprovado'
-  if (statusFilter === 'rejected') return 'recusado'
+  if (statusFilter === 'approved') return 'confirmado'
+  if (statusFilter === 'rejected') return 'cancelado'
   return 'all'
+}
+
+function statusLabel(status) {
+  if (status === 'confirmado') return 'Aprovado'
+  if (status === 'cancelado') return 'Recusado'
+  if (status === 'pendente') return 'Pendente'
+  return status || 'Sem status'
 }
 
 function formatISODateToBr(value) {
@@ -155,7 +162,7 @@ function formatTimeLabel(value) {
 }
 
 function mapResgateToActivity(row) {
-  const occurredAt = row.confirmado_em ?? row.criado_em
+  const occurredAt = row.criado_em
   const safeDate = toSafeDate(occurredAt)
 
   return {
@@ -168,7 +175,8 @@ function mapResgateToActivity(row) {
     occurredAtLabel: formatTimeLabel(safeDate).replace(':', 'h'),
     occurredDateISO: safeDate.toISOString().slice(0, 10),
     sortKey: safeDate.getTime(),
-    status: row.status,
+    status: row.status ?? '',
+    rejectionReason: row.motivo_recusa ?? '',
   }
 }
 
@@ -204,6 +212,7 @@ export default function PartnerPortalActivities() {
             withRequestTimeout(
               fetchResgates(
                 supabase,
+                partnerProfileId,
                 statusQueryFilter === 'all' ? null : statusQueryFilter,
               ),
               {
@@ -272,7 +281,7 @@ export default function PartnerPortalActivities() {
           return true
         }
 
-        const haystack = normalizeSearchText(activity.studentName)
+        const haystack = normalizeSearchText(`${activity.studentName} ${activity.productTitle}`)
 
         return haystack.includes(normalizedQuery)
       })
@@ -487,13 +496,20 @@ export default function PartnerPortalActivities() {
                     <div key={activity.id} className="partner-activities-row">
                       <div className="partner-activities-main">
                         <h3>{activity.studentName}</h3>
-                        <p>{activity.productSummary || activity.productTitle}</p>
+                        <p>
+                          {activity.productSummary || activity.productTitle}
+                          {' | '}
+                          {statusLabel(activity.status)}
+                        </p>
+                        {activity.status === 'cancelado' && activity.rejectionReason ? (
+                          <p>Motivo: {activity.rejectionReason}</p>
+                        ) : null}
                       </div>
 
                       <div className="partner-activities-values">
                         <p
                           className={
-                            activity.status === 'recusado'
+                            activity.status === 'cancelado'
                               ? 'partner-activities-amount partner-activities-amount-rejected'
                               : 'partner-activities-amount'
                           }

@@ -6,7 +6,7 @@ import { supabase } from '../../../lib/supabase'
 import PartnerPortalLayout from '../components/PartnerPortalLayout'
 import {
   atualizarStatusResgate,
-  fetchAtividadesConcedidas,
+  fetchAtividadesParceiro,
   fetchResgatesPendentes,
   getParceiroDataErrorMessage,
 } from '../hooks/useParceiroData'
@@ -85,7 +85,6 @@ function formatDateLabel(value) {
     month: '2-digit',
     year: 'numeric',
   }).format(safeDate)
-
   return `${weekday} - ${dateLabel}`
 }
 
@@ -112,19 +111,25 @@ function mapResgatePendente(row) {
   }
 }
 
-function mapAtividadeConcedida(row) {
-  const safeDate = toSafeDate(row.concedido_em)
+function mapAtividadeResgate(row) {
+  const safeDate = toSafeDate(row.criado_em)
+  const mappedStatus =
+    row.status === 'cancelado'
+      ? 'recusado'
+      : row.status === 'confirmado'
+        ? 'aprovado'
+        : 'pendente'
 
   return {
     id: row.id,
     studentName: row.aluno?.nome_completo ?? 'Aluno',
-    productTitle: row.titulo_snapshot ?? 'Atividade',
-    productSummary: row.titulo_snapshot ?? 'Atividade',
+    productTitle: row.produto?.titulo ?? 'Produto',
+    productSummary: row.produto?.titulo ?? 'Produto',
     amountEuras: ensureNumber(row.valor_euras),
     dateLabel: formatDateLabel(safeDate),
     occurredAtLabel: formatCompactTimeLabel(safeDate),
     occurredDateISO: safeDate.toISOString().slice(0, 10),
-    status: 'aprovado',
+    status: mappedStatus,
   }
 }
 
@@ -156,12 +161,10 @@ export default function PartnerPortalHome() {
           () =>
             withRequestTimeout(
               Promise.all([
-                fetchResgatesPendentes(supabase, 3),
-                fetchAtividadesConcedidas(supabase, 5),
+                fetchResgatesPendentes(supabase, partnerProfileId),
+                fetchAtividadesParceiro(supabase, partnerProfileId, 5),
               ]),
-              {
-                message: 'Tempo limite ao carregar o portal parceiro. Tente novamente.',
-              },
+              { message: 'Tempo limite ao carregar o portal parceiro. Tente novamente.' },
             ),
           { attempts: 2 },
         )
@@ -172,24 +175,18 @@ export default function PartnerPortalHome() {
         if (atividadesResponse.error) throw atividadesResponse.error
 
         setPendingRequests((resgatesResponse.data ?? []).map(mapResgatePendente))
-        setActivities((atividadesResponse.data ?? []).map(mapAtividadeConcedida))
+        setActivities((atividadesResponse.data ?? []).map(mapAtividadeResgate))
       } catch (error) {
         if (!active) return
-
         console.info('Falha ao carregar painel do parceiro.', error)
         setLoadError(getParceiroDataErrorMessage(error))
       } finally {
-        if (active) {
-          setLoading(false)
-        }
+        if (active) setLoading(false)
       }
     }
 
     loadHomeData()
-
-    return () => {
-      active = false
-    }
+    return () => { active = false }
   }, [partnerProfileId, reloadNonce])
 
   const visiblePendingRequests = useMemo(() => pendingRequests.slice(0, 3), [pendingRequests])
@@ -197,7 +194,6 @@ export default function PartnerPortalHome() {
 
   const closeModal = (force = false) => {
     if (actionLoading && !force) return
-
     setSelectedRequest(null)
     setModalStage('analysis')
     setRejectReason('')
@@ -211,14 +207,16 @@ export default function PartnerPortalHome() {
     setActionError('')
   }
 
-  const openRejectModal = () => {
+  const openRejectModal = (request = null) => {
+    if (request) {
+      setSelectedRequest(request)
+    }
     setModalStage('reject')
     setActionError('')
   }
 
   const removeRequestFromList = () => {
     if (!selectedRequest) return
-
     setPendingRequests((current) => current.filter((item) => item.id !== selectedRequest.id))
   }
 
@@ -236,11 +234,10 @@ export default function PartnerPortalHome() {
       const { error } = await atualizarStatusResgate(
         supabase,
         selectedRequest.id,
-        'aprovado',
+        'confirmado',
         partnerProfileId,
       )
       if (error) throw error
-
       removeRequestFromList()
       setModalStage('success')
     } catch (error) {
@@ -269,11 +266,11 @@ export default function PartnerPortalHome() {
       const { error } = await atualizarStatusResgate(
         supabase,
         selectedRequest.id,
-        'recusado',
+        'cancelado',
         partnerProfileId,
+        rejectReason.trim(),
       )
       if (error) throw error
-
       removeRequestFromList()
       setModalStage('rejected')
     } catch (error) {
@@ -317,7 +314,6 @@ export default function PartnerPortalHome() {
                       Solicitou o produto ({request.productTitle}) às {request.requestedAtLabel}
                     </p>
                   </div>
-
                   <div className="partner-home-request-actions">
                     <p className="partner-home-amount">&lt; {formatEuras(request.amountEuras)}</p>
                     <button
@@ -325,20 +321,27 @@ export default function PartnerPortalHome() {
                       className="partner-home-analyze-button"
                       onClick={() => openAnalyzeModal(request)}
                     >
-                      Analisar resgate
+                      Confirmar
+                    </button>
+                    <button
+                      type="button"
+                      className="partner-home-reject-link"
+                      onClick={() => openRejectModal(request)}
+                    >
+                      Recusar
                     </button>
                   </div>
                 </div>
               ))
             : null}
 
-          {!loading && !loadError && pendingRequests.length >= 3 ? (
+          {!loading && !loadError && pendingRequests.length > 3 ? (
             <button
               type="button"
               className="partner-home-see-all-button"
               onClick={() => navigate('/portal-parceiro/solicitacoes')}
             >
-              Ver todas as solicitações
+              Ver todas solicitações
             </button>
           ) : null}
         </article>
@@ -358,14 +361,18 @@ export default function PartnerPortalHome() {
                     <h3>{activity.studentName}</h3>
                     <p>{activity.productSummary || activity.productTitle}</p>
                   </div>
-
                   <div className="partner-home-activity-values">
                     <p
-                      className={
-                        activity.status === 'recusado'
-                          ? 'partner-home-activity-amount partner-home-activity-amount-negative'
-                          : 'partner-home-activity-amount'
-                      }
+                      style={{
+                        color:
+                          activity.status === 'recusado'
+                            ? '#e53935'
+                            : activity.status === 'aprovado'
+                              ? '#2e7d32'
+                              : '#5f6368',
+                        fontWeight: 'bold',
+                        fontSize: '1.1rem',
+                      }}
                     >
                       &lt; {formatEuras(activity.amountEuras)}
                     </p>
@@ -388,7 +395,12 @@ export default function PartnerPortalHome() {
       {selectedRequest ? (
         <div className="partner-home-modal-backdrop" role="presentation">
           {modalStage === 'analysis' ? (
-            <div className="partner-home-modal" role="dialog" aria-modal="true" aria-label="Analisar resgate">
+            <div
+              className="partner-home-modal"
+              role="dialog"
+              aria-modal="true"
+              aria-label="Analisar resgate"
+            >
               <button
                 type="button"
                 className="partner-home-modal-close"
@@ -412,42 +424,27 @@ export default function PartnerPortalHome() {
                 {actionLoading ? 'Processando...' : 'Aprovar'}
               </button>
 
-              <button type="button" className="partner-home-reject-link" onClick={openRejectModal}>
+              <button
+                type="button"
+                className="partner-home-reject-link"
+                onClick={openRejectModal}
+              >
                 Recusar solicitação de resgate
               </button>
 
-              {actionError ? <p className="form-message form-message-error">{actionError}</p> : null}
-            </div>
-          ) : null}
-
-          {modalStage === 'success' ? (
-            <div className="partner-home-modal partner-home-modal-success" role="dialog" aria-modal="true" aria-label="Resgate concluído">
-              <div className="partner-home-success-icon">
-                <SuccessIcon />
-              </div>
-              <p>O resgate foi concluído!</p>
-
-              <button type="button" className="partner-home-approve-button" onClick={closeModal}>
-                Continuar
-              </button>
-            </div>
-          ) : null}
-
-          {modalStage === 'rejected' ? (
-            <div className="partner-home-modal partner-home-modal-success" role="dialog" aria-modal="true" aria-label="Resgate recusado">
-              <div className="partner-home-success-icon">
-                <RejectedIcon />
-              </div>
-              <p>O resgate foi recusado!</p>
-
-              <button type="button" className="partner-home-approve-button" onClick={closeModal}>
-                Continuar
-              </button>
+              {actionError ? (
+                <p className="form-message form-message-error">{actionError}</p>
+              ) : null}
             </div>
           ) : null}
 
           {modalStage === 'reject' ? (
-            <div className="partner-home-modal" role="dialog" aria-modal="true" aria-label="Motivo da recusa">
+            <div
+              className="partner-home-modal"
+              role="dialog"
+              aria-modal="true"
+              aria-label="Motivo da recusa"
+            >
               <button
                 type="button"
                 className="partner-home-modal-close"
@@ -457,7 +454,9 @@ export default function PartnerPortalHome() {
                 <CloseIcon />
               </button>
 
-              <h3 className="partner-home-reject-title">Por qual motivo deseja recusar esse resgate?</h3>
+              <h3 className="partner-home-reject-title">
+                Por qual motivo deseja recusar esse resgate?
+              </h3>
               <textarea
                 className="partner-home-reject-textarea"
                 value={rejectReason}
@@ -471,10 +470,54 @@ export default function PartnerPortalHome() {
                 onClick={handleReject}
                 disabled={actionLoading}
               >
-                {actionLoading ? 'Recusando...' : 'Recusar'}
+                {actionLoading ? 'Recusando...' : 'Confirmar recusa'}
               </button>
 
-              {actionError ? <p className="form-message form-message-error">{actionError}</p> : null}
+              {actionError ? (
+                <p className="form-message form-message-error">{actionError}</p>
+              ) : null}
+            </div>
+          ) : null}
+
+          {modalStage === 'success' ? (
+            <div
+              className="partner-home-modal partner-home-modal-success"
+              role="dialog"
+              aria-modal="true"
+              aria-label="Resgate concluído"
+            >
+              <div className="partner-home-success-icon">
+                <SuccessIcon />
+              </div>
+              <p>O resgate foi concluído!</p>
+              <button
+                type="button"
+                className="partner-home-approve-button"
+                onClick={closeModal}
+              >
+                Continuar
+              </button>
+            </div>
+          ) : null}
+
+          {modalStage === 'rejected' ? (
+            <div
+              className="partner-home-modal partner-home-modal-success"
+              role="dialog"
+              aria-modal="true"
+              aria-label="Resgate recusado"
+            >
+              <div className="partner-home-success-icon">
+                <RejectedIcon />
+              </div>
+              <p>O resgate foi recusado!</p>
+              <button
+                type="button"
+                className="partner-home-approve-button"
+                onClick={closeModal}
+              >
+                Continuar
+              </button>
             </div>
           ) : null}
         </div>

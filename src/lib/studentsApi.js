@@ -55,12 +55,34 @@ function isMissingRelationError(error) {
   return error?.code === 'PGRST205' || message.includes('could not find the table') || message.includes('relation')
 }
 
+function isMissingColumnError(error, columnName) {
+  const joined = [
+    String(error?.message ?? ''),
+    String(error?.details ?? ''),
+    String(error?.hint ?? ''),
+  ]
+    .join(' ')
+    .toLowerCase()
+
+  return joined.includes(String(columnName ?? '').toLowerCase()) && joined.includes('column')
+}
+
+function isEmailAlreadyExistsError(error) {
+  const message = String(error?.message ?? '').toLowerCase()
+  return (
+    message.includes('already') ||
+    message.includes('exists') ||
+    error?.code === 'email_exists' ||
+    Number(error?.status) === 422
+  )
+}
+
 function mapStudent(row) {
   return {
     id: row.id,
     name: row.nome_completo ?? '',
     course: row.curso ?? '',
-    campus: row.campus ?? '',
+    campus: row.campus ?? row.sede ?? '',
     phone: row.telefone ?? '',
     entryDate: isoToBrDate(row.data_entrada),
     email: row.email ?? '',
@@ -69,11 +91,33 @@ function mapStudent(row) {
 }
 
 async function listStudentsFromLegacyTables() {
-  const { data: students, error: studentError } = await euras
+  let query = euras
     .from('alunos')
-    .select('id, nome_completo, telefone, email, campus, curso, data_entrada, ativo')
+    .select('*')
     .eq('ativo', true)
+    .not('curso', 'is', null)
+    .not('campus', 'is', null)
+    .neq('curso', '')
+    .neq('campus', '')
     .order('nome_completo', { ascending: true })
+
+  let { data: students, error: studentError } = await query
+
+  if (studentError && isMissingColumnError(studentError, 'campus')) {
+    query = euras
+      .from('alunos')
+      .select('*')
+      .eq('ativo', true)
+      .not('curso', 'is', null)
+      .not('sede', 'is', null)
+      .neq('curso', '')
+      .neq('sede', '')
+      .order('nome_completo', { ascending: true })
+
+    const fallbackResponse = await query
+    students = fallbackResponse.data
+    studentError = fallbackResponse.error
+  }
 
   if (studentError) {
     throw studentError
@@ -201,7 +245,7 @@ async function resolveCreatorProfileId(createdByAuthUserId) {
     throw authLookupError
   }
 
-  if (profileByAutha.id) {
+  if (profileByAuth?.id) {
     return profileByAuth.id
   }
 
@@ -268,6 +312,10 @@ export function getStudentApiErrorMessage(error) {
     return 'Operação bloqueada por permissão (RLS). Verifique se seu usuário é admin.'
   }
 
+  if (isEmailAlreadyExistsError(error)) {
+    return 'Este e-mail já possui uma conta no sistema. Verifique se o aluno já existe ou use outro e-mail.'
+  }
+
   if (error?.code === '23503') {
     return 'Não foi possível concluir a operação por referência inválida entre tabelas.'
   }
@@ -282,11 +330,33 @@ export function getStudentApiErrorMessage(error) {
 export async function listStudents() {
   await ensureFreshSession()
 
-  const { data, error } = await euras
+  let query = euras
     .from('alunos_com_saldo')
     .select('id, nome_completo, telefone, email, campus, curso, data_entrada, ativo, saldo_euras')
     .eq('ativo', true)
+    .not('curso', 'is', null)
+    .not('campus', 'is', null)
+    .neq('curso', '')
+    .neq('campus', '')
     .order('nome_completo', { ascending: true })
+
+  let { data, error } = await query
+
+  if (error && isMissingColumnError(error, 'campus')) {
+    query = euras
+      .from('alunos_com_saldo')
+      .select('id, nome_completo, telefone, email, sede, curso, data_entrada, ativo, saldo_euras')
+      .eq('ativo', true)
+      .not('curso', 'is', null)
+      .not('sede', 'is', null)
+      .neq('curso', '')
+      .neq('sede', '')
+      .order('nome_completo', { ascending: true })
+
+    const fallbackResponse = await query
+    data = fallbackResponse.data
+    error = fallbackResponse.error
+  }
 
   if (error) {
     if (isMissingRelationError(error)) {
@@ -351,6 +421,15 @@ export async function createStudent(student) {
     .single()
 
   if (error) {
+    if (isEmailAlreadyExistsError(error)) {
+      const duplicateEmailError = new Error(
+        'Este e-mail já possui uma conta no sistema. Verifique se o aluno já existe ou use outro e-mail.',
+      )
+      duplicateEmailError.code = error.code ?? 'email_exists'
+      duplicateEmailError.status = error.status ?? 422
+      throw duplicateEmailError
+    }
+
     throw error
   }
 

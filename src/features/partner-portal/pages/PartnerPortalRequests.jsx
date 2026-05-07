@@ -5,9 +5,24 @@ import { runWithRetries, withRequestTimeout } from '../../../lib/requestGuards'
 import { supabase } from '../../../lib/supabase'
 import PartnerPortalLayout from '../components/PartnerPortalLayout'
 import {
+  atualizarStatusResgate,
   fetchResgatesPendentes,
   getParceiroDataErrorMessage,
 } from '../hooks/useParceiroData'
+
+function CloseIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path
+        d="M6 6l12 12M18 6 6 18"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+    </svg>
+  )
+}
 
 function normalize(text) {
   return String(text ?? '')
@@ -70,6 +85,10 @@ export default function PartnerPortalRequests() {
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
   const [reloadNonce, setReloadNonce] = useState(0)
+  const [selectedRequest, setSelectedRequest] = useState(null)
+  const [rejectReason, setRejectReason] = useState('')
+  const [actionLoading, setActionLoading] = useState(false)
+  const [actionError, setActionError] = useState('')
 
   const partnerProfileId = profile?.id ?? null
 
@@ -83,7 +102,7 @@ export default function PartnerPortalRequests() {
       try {
         const response = await runWithRetries(
           () =>
-            withRequestTimeout(fetchResgatesPendentes(supabase), {
+            withRequestTimeout(fetchResgatesPendentes(supabase, partnerProfileId), {
               message: 'Tempo limite ao carregar as solicitações de resgate. Tente novamente.',
             }),
           { attempts: 2 },
@@ -120,6 +139,86 @@ export default function PartnerPortalRequests() {
       return student.includes(search) || product.includes(search)
     })
   }, [requests, searchTerm])
+
+  const removeRequestFromList = (requestId) => {
+    setRequests((current) => current.filter((request) => request.id !== requestId))
+  }
+
+  const handleApprove = async (request) => {
+    if (!request) return
+
+    if (!partnerProfileId) {
+      setActionError('Sessão expirada. Faça login novamente.')
+      return
+    }
+
+    setActionLoading(true)
+    setActionError('')
+
+    try {
+      const { error } = await atualizarStatusResgate(
+        supabase,
+        request.id,
+        'confirmado',
+        partnerProfileId,
+      )
+
+      if (error) throw error
+      removeRequestFromList(request.id)
+    } catch (error) {
+      setActionError(getParceiroDataErrorMessage(error))
+    } finally {
+      setActionLoading(false)
+    }
+  }
+
+  const openRejectModal = (request) => {
+    setSelectedRequest(request)
+    setRejectReason('')
+    setActionError('')
+  }
+
+  const closeRejectModal = () => {
+    if (actionLoading) return
+    setSelectedRequest(null)
+    setRejectReason('')
+    setActionError('')
+  }
+
+  const handleReject = async () => {
+    if (!selectedRequest) return
+
+    if (!partnerProfileId) {
+      setActionError('Sessão expirada. Faça login novamente.')
+      return
+    }
+
+    if (!rejectReason.trim()) {
+      setActionError('Informe o motivo para recusar a solicitação.')
+      return
+    }
+
+    setActionLoading(true)
+    setActionError('')
+
+    try {
+      const { error } = await atualizarStatusResgate(
+        supabase,
+        selectedRequest.id,
+        'cancelado',
+        partnerProfileId,
+        rejectReason.trim(),
+      )
+
+      if (error) throw error
+      removeRequestFromList(selectedRequest.id)
+      closeRejectModal()
+    } catch (error) {
+      setActionError(getParceiroDataErrorMessage(error))
+    } finally {
+      setActionLoading(false)
+    }
+  }
 
   return (
     <PartnerPortalLayout title="Solicitações de resgates">
@@ -175,12 +274,75 @@ export default function PartnerPortalRequests() {
 
                   <div className="partner-home-request-actions">
                     <p className="partner-home-amount">&lt; {formatEuras(request.amountEuras)}</p>
+                    <button
+                      type="button"
+                      className="partner-home-analyze-button"
+                      onClick={() => handleApprove(request)}
+                      disabled={actionLoading}
+                    >
+                      Confirmar
+                    </button>
+                    <button
+                      type="button"
+                      className="partner-home-reject-link"
+                      onClick={() => openRejectModal(request)}
+                      disabled={actionLoading}
+                    >
+                      Recusar
+                    </button>
                   </div>
                 </div>
               ))
             : null}
+
+          {actionError && !selectedRequest ? (
+            <p className="form-message form-message-error">{actionError}</p>
+          ) : null}
         </article>
       </section>
+
+      {selectedRequest ? (
+        <div className="partner-home-modal-backdrop" role="presentation">
+          <div
+            className="partner-home-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Motivo da recusa"
+          >
+            <button
+              type="button"
+              className="partner-home-modal-close"
+              aria-label="Fechar motivo da recusa"
+              onClick={closeRejectModal}
+            >
+              <CloseIcon />
+            </button>
+
+            <h3 className="partner-home-reject-title">
+              Por qual motivo deseja recusar esse resgate?
+            </h3>
+            <textarea
+              className="partner-home-reject-textarea"
+              value={rejectReason}
+              onChange={(event) => setRejectReason(event.target.value)}
+              placeholder="Descreva o motivo da recusa."
+            />
+
+            <button
+              type="button"
+              className="partner-home-reject-button"
+              onClick={handleReject}
+              disabled={actionLoading}
+            >
+              {actionLoading ? 'Recusando...' : 'Confirmar recusa'}
+            </button>
+
+            {actionError ? (
+              <p className="form-message form-message-error">{actionError}</p>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
     </PartnerPortalLayout>
   )
 }

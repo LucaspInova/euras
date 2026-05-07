@@ -46,26 +46,22 @@ const MONTH_OPTIONS = [
   { value: '12', label: 'Dezembro' },
 ]
 
-const PREVIEW_ACTIVITIES_TARGET = 180
-const PREVIEW_ACTIVITY_DESCRIPTIONS = [
-  'Resgate confirmado no parceiro',
-  'Credito promocional semanal',
-  'Ajuste de carteira pelo suporte',
-  'Resgate parcial confirmado',
-  'Bonus de desempenho academico',
-]
-
 function normalize(text) {
-  return text.normalize('NFD').replace(/\p{Diacritic}/gu, '').toUpperCase()
+  return String(text ?? '')
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
+    .toUpperCase()
 }
 
 function formatDate(isoDate) {
-  const [year, month, day] = isoDate.split('-')
+  const [year, month, day] = String(isoDate ?? '').split('-')
+  if (!year || !month || !day) return '--/--/----'
   return `${day}/${month}/${year}`
 }
 
 function formatDateForExport(isoDate) {
-  const [year, month, day] = isoDate.split('-')
+  const [year, month, day] = String(isoDate ?? '').split('-')
+  if (!year || !month || !day) return '--/--/--'
   return `${day}/${month}/${year.slice(2)}`
 }
 
@@ -76,17 +72,28 @@ function getWeekdayLabel(isoDate) {
 }
 
 function formatAmount(value) {
-  return `< ${Number(value).toFixed(2).replace('.', ',')}`
+  return `< ${Number(value ?? 0).toFixed(2).replace('.', ',')}`
 }
 
 function formatTime(value) {
-  return value.replace(':', 'h')
+  return String(value ?? '').replace(':', 'h')
+}
+
+function formatStatus(status) {
+  if (status === 'confirmado') return 'Aprovado'
+  if (status === 'cancelado') return 'Recusado'
+  if (status === 'pendente') return 'Pendente'
+  return status || 'Sem status'
+}
+
+function buildActivitySummary(activity) {
+  return `Parceiro: ${activity.partnerName} | Produto: ${activity.productName} | Status: ${formatStatus(activity.status)}`
 }
 
 function groupByDate(activities) {
   const map = new Map()
 
-  activities.forEach((activity) => {
+  for (const activity of activities) {
     const key = activity.date
     const list = map.get(key)
     if (list) {
@@ -94,82 +101,15 @@ function groupByDate(activities) {
     } else {
       map.set(key, [activity])
     }
-  })
+  }
 
   return Array.from(map.entries()).map(([date, items]) => ({ date, items }))
-}
-
-function toIsoDate(date) {
-  const year = date.getFullYear()
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const day = String(date.getDate()).padStart(2, '0')
-  return `${year}-${month}-${day}`
-}
-
-function toIsoTime(date) {
-  const hours = String(date.getHours()).padStart(2, '0')
-  const minutes = String(date.getMinutes()).padStart(2, '0')
-  return `${hours}:${minutes}`
-}
-
-function buildPreviewActivities(sourceActivities) {
-  if (!Array.isArray(sourceActivities) || sourceActivities.length === 0) {
-    return Array.from({ length: PREVIEW_ACTIVITIES_TARGET }).map((_, index) => {
-      const baseDate = new Date()
-      baseDate.setDate(baseDate.getDate() - Math.floor(index / 7))
-      baseDate.setMinutes(baseDate.getMinutes() - index * 13)
-
-      return {
-        id: `preview-activity-seed-${index + 1}`,
-        studentName: `ALUNO DEMO ${String(index + 1).padStart(3, '0')}`,
-        description: PREVIEW_ACTIVITY_DESCRIPTIONS[index % PREVIEW_ACTIVITY_DESCRIPTIONS.length],
-        amountEuras: 35 + (index % 9) * 12,
-        date: toIsoDate(baseDate),
-        time: toIsoTime(baseDate),
-      }
-    })
-  }
-
-  const expanded = [...sourceActivities]
-  let cursor = 0
-
-  while (expanded.length < PREVIEW_ACTIVITIES_TARGET) {
-    const source = sourceActivities[cursor % sourceActivities.length]
-    const cloneNumber = expanded.length + 1
-    const description = PREVIEW_ACTIVITY_DESCRIPTIONS[cursor % PREVIEW_ACTIVITY_DESCRIPTIONS.length]
-    const amountVariation = ((cursor % 7) - 3) * 4
-    const amountEuras = Math.max(10, Number(source.amountEuras ?? 0) + amountVariation)
-    const seedDate = new Date(`${source.date}T${source.time}:00`)
-    const referenceDate = Number.isNaN(seedDate.getTime()) ? new Date() : seedDate
-    const shiftedDate = new Date(referenceDate)
-
-    shiftedDate.setDate(shiftedDate.getDate() - (1 + Math.floor(cursor / 6)))
-    shiftedDate.setMinutes(shiftedDate.getMinutes() - ((cursor % 5) + 1) * 9)
-
-    expanded.push({
-      ...source,
-      id: `preview-activity-${source.id}-${cloneNumber}`,
-      studentName: `${source.studentName} ${String(cloneNumber).padStart(3, '0')}`,
-      description,
-      amountEuras,
-      date: toIsoDate(shiftedDate),
-      time: toIsoTime(shiftedDate),
-    })
-
-    cursor += 1
-  }
-
-  return expanded.sort((a, b) => {
-    if (a.date !== b.date) {
-      return b.date.localeCompare(a.date)
-    }
-    return b.time.localeCompare(a.time)
-  })
 }
 
 export default function Activities() {
   const filterRef = useRef(null)
   const [searchTerm, setSearchTerm] = useState('')
+  const [statusFilter, setStatusFilter] = useState('all')
   const [dateFilterType, setDateFilterType] = useState('month')
   const [selectedMonth, setSelectedMonth] = useState('')
   const [selectedMonthYear, setSelectedMonthYear] = useState('')
@@ -188,7 +128,7 @@ export default function Activities() {
       setLoadError('')
 
       try {
-        const nextActivities = await listActivities()
+        const nextActivities = await listActivities(statusFilter)
         if (!active) return
         setActivities(nextActivities)
       } catch (error) {
@@ -206,9 +146,7 @@ export default function Activities() {
     return () => {
       active = false
     }
-  }, [])
-
-  const previewActivities = useMemo(() => buildPreviewActivities(activities), [activities])
+  }, [statusFilter])
 
   useEffect(() => {
     if (!showDateFilter) {
@@ -228,14 +166,14 @@ export default function Activities() {
   const filteredActivities = useMemo(() => {
     const normalizedSearch = normalize(searchTerm.trim())
 
-    return previewActivities.filter((activity) => {
+    return activities.filter((activity) => {
       const matchesSearch =
         !normalizedSearch ||
         normalize(activity.studentName).includes(normalizedSearch) ||
-        normalize(activity.description).includes(normalizedSearch)
+        normalize(activity.partnerName).includes(normalizedSearch)
 
-      const activityYear = activity.date.slice(0, 4)
-      const activityMonth = activity.date.slice(5, 7)
+      const activityYear = String(activity.date ?? '').slice(0, 4)
+      const activityMonth = String(activity.date ?? '').slice(5, 7)
       const matchesMonth =
         (!selectedMonth || activityMonth === selectedMonth) &&
         (!selectedMonthYear || activityYear === selectedMonthYear)
@@ -244,15 +182,15 @@ export default function Activities() {
 
       return matchesSearch && matchesDate
     })
-  }, [dateFilterType, previewActivities, searchTerm, selectedMonth, selectedMonthYear, selectedYear])
+  }, [activities, dateFilterType, searchTerm, selectedMonth, selectedMonthYear, selectedYear])
 
   const yearOptions = useMemo(() => {
-    const values = Array.from(new Set(previewActivities.map((activity) => activity.date.slice(0, 4))))
+    const values = Array.from(new Set(activities.map((activity) => String(activity.date ?? '').slice(0, 4)).filter(Boolean)))
     if (values.length === 0) {
       return [String(new Date().getFullYear())]
     }
     return values.sort((a, b) => b.localeCompare(a))
-  }, [previewActivities])
+  }, [activities])
 
   const groupedActivities = useMemo(() => groupByDate(filteredActivities), [filteredActivities])
 
@@ -262,12 +200,14 @@ export default function Activities() {
       return
     }
 
-    const header = ['Data', 'Hora', 'Aluno', 'Descrição', 'ValorEuras']
+    const header = ['Data', 'Hora', 'Aluno', 'Loja', 'Produto', 'Status', 'ValorEuras']
     const rows = filteredActivities.map((activity) => [
       `\u200B${formatDateForExport(activity.date)}`,
       activity.time,
       activity.studentName,
-      activity.description,
+      activity.partnerName,
+      activity.productName,
+      activity.status,
       String(activity.amountEuras).replace('.', ','),
     ])
 
@@ -339,8 +279,7 @@ export default function Activities() {
                   <select
                     value={dateFilterType}
                     onChange={(event) => {
-                      const nextType = event.target.value
-                      setDateFilterType(nextType)
+                      setDateFilterType(event.target.value)
                       setActionMessage('')
                     }}
                   >
@@ -435,6 +374,45 @@ export default function Activities() {
           </div>
         </div>
 
+        <div className="activities-status-tabs" role="tablist" aria-label="Filtro por status das atividades">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={statusFilter === 'all'}
+            className={statusFilter === 'all' ? 'activities-status-tab active' : 'activities-status-tab'}
+            onClick={() => {
+              setStatusFilter('all')
+              setActionMessage('')
+            }}
+          >
+            Todas as atividades
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={statusFilter === 'approved'}
+            className={statusFilter === 'approved' ? 'activities-status-tab active' : 'activities-status-tab'}
+            onClick={() => {
+              setStatusFilter('approved')
+              setActionMessage('')
+            }}
+          >
+            Aprovadas
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={statusFilter === 'rejected'}
+            className={statusFilter === 'rejected' ? 'activities-status-tab active' : 'activities-status-tab'}
+            onClick={() => {
+              setStatusFilter('rejected')
+              setActionMessage('')
+            }}
+          >
+            Recusadas
+          </button>
+        </div>
+
         <section className="activities-board" aria-label="Historico de atividades">
           {loading ? <p className="activities-empty-state">Carregando atividades...</p> : null}
           {loadError ? <p className="activities-empty-state">{loadError}</p> : null}
@@ -442,27 +420,27 @@ export default function Activities() {
 
           {!loading && !loadError
             ? groupedActivities.map((group) => (
-            <section key={group.date} className="activities-day-group">
-              <p className="activities-day-title">
-                {getWeekdayLabel(group.date)} - {formatDate(group.date)}
-              </p>
+                <section key={group.date} className="activities-day-group">
+                  <p className="activities-day-title">
+                    {getWeekdayLabel(group.date)} - {formatDate(group.date)}
+                  </p>
 
-              <div className="activities-day-items">
-                {group.items.map((activity) => (
-                  <article key={activity.id} className="activity-row">
-                    <div className="activity-main">
-                      <h3>{activity.studentName}</h3>
-                      <p>{activity.description}</p>
-                    </div>
+                  <div className="activities-day-items">
+                    {group.items.map((activity) => (
+                      <article key={activity.id} className="activity-row">
+                        <div className="activity-main">
+                          <h3>{activity.studentName}</h3>
+                          <p>{buildActivitySummary(activity)}</p>
+                        </div>
 
-                    <div className="activity-meta">
-                      <strong>{formatAmount(activity.amountEuras)}</strong>
-                      <span>{formatTime(activity.time)}</span>
-                    </div>
-                  </article>
-                ))}
-              </div>
-            </section>
+                        <div className="activity-meta">
+                          <strong>{formatAmount(activity.amountEuras)}</strong>
+                          <span>{formatTime(activity.time)}</span>
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+                </section>
               ))
             : null}
 

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../../context/AuthContext'
+import { buildOptimizedImageDataUrl } from '../../../lib/imageUpload'
 import { supabase } from '../../../lib/supabase'
 import PartnerPortalLayout from '../components/PartnerPortalLayout'
 import {
@@ -64,6 +65,9 @@ export default function PartnerPortalProductCreate() {
   const { profile } = useAuth()
   const [formError, setFormError] = useState('')
   const [isSaving, setIsSaving] = useState(false)
+  const [loadingPartner, setLoadingPartner] = useState(true)
+  const [partnerProfileId, setPartnerProfileId] = useState(null)
+  const [partnerRowId, setPartnerRowId] = useState(null)
   const [institutionName, setInstitutionName] = useState(resolveInstitutionName(profile))
   const [form, setForm] = useState({
     name: '',
@@ -72,19 +76,48 @@ export default function PartnerPortalProductCreate() {
     imageUrl: '',
   })
 
-  const partnerProfileId = profile?.id ?? null
-
   useEffect(() => {
     let active = true
 
     async function loadParceiro() {
-      const { data } = await fetchParceiro(supabase)
+      setLoadingPartner(true)
+      setFormError('')
 
-      if (!active) return
-      if (data?.nome_instituicao?.trim()) {
-        setInstitutionName(data.nome_instituicao.trim())
-      } else {
-        setInstitutionName(resolveInstitutionName(profile))
+      try {
+        const { data: authData, error: authError } = await supabase.auth.getUser()
+        if (authError) throw authError
+
+        const authUser = authData?.user ?? null
+        if (!authUser?.id) {
+          throw new Error('Sessao expirada. Faca login novamente.')
+        }
+
+        const { data, error } = await fetchParceiro(supabase)
+        if (error) throw error
+
+        if (!active) return
+
+        const resolvedProfileId = data?.perfil_parceiro_id ?? null
+        const resolvedPartnerRowId = data?.id ?? null
+        if (!data || (!resolvedProfileId && !resolvedPartnerRowId)) {
+          setPartnerProfileId(null)
+          setPartnerRowId(null)
+          setFormError('Seu usuario nao esta vinculado a nenhum parceiro. Contate o administrador.')
+          return
+        }
+
+        setPartnerProfileId(resolvedProfileId)
+        setPartnerRowId(resolvedPartnerRowId)
+        setInstitutionName(data?.nome_instituicao?.trim() || resolveInstitutionName(profile))
+      } catch (error) {
+        if (!active) return
+        setPartnerProfileId(null)
+        setPartnerRowId(null)
+        setFormError(getParceiroDataErrorMessage(error))
+      } finally {
+        if (active) {
+          setLoadingPartner(false)
+        }
       }
     }
 
@@ -105,23 +138,24 @@ export default function PartnerPortalProductCreate() {
 
   const handleImageChange = async (event) => {
     const file = event.target.files?.[0]
+    event.target.value = ''
 
     if (!file) {
       return
     }
 
     if (!file.type.startsWith('image/')) {
-      setFormError('Selecione um arquivo de imagem válido.')
-      event.target.value = ''
+      setFormError('Selecione um arquivo de imagem valido.')
       return
     }
 
-    setFormError('')
-
-    const objectUrl = URL.createObjectURL(file)
-    setForm((current) => ({ ...current, imageUrl: objectUrl }))
-
-    event.target.value = ''
+    try {
+      const optimizedImageDataUrl = await buildOptimizedImageDataUrl(file)
+      setForm((current) => ({ ...current, imageUrl: optimizedImageDataUrl }))
+      setFormError('')
+    } catch (error) {
+      setFormError(error?.message ?? 'Nao foi possivel carregar essa imagem.')
+    }
   }
 
   const handleSubmit = async (event) => {
@@ -140,12 +174,12 @@ export default function PartnerPortalProductCreate() {
 
     const parsedPrice = parseEurasValue(form.value.trim())
     if (!Number.isFinite(parsedPrice) || parsedPrice < 0) {
-      setFormError('Informe um valor válido para o produto.')
+      setFormError('Informe um valor valido para o produto.')
       return
     }
 
-    if (!partnerProfileId) {
-      setFormError('Sessão expirada. Faça login novamente.')
+    if (!partnerProfileId && !partnerRowId) {
+      setFormError('Seu usuario nao esta vinculado a nenhum parceiro. Contate o administrador.')
       return
     }
 
@@ -154,14 +188,15 @@ export default function PartnerPortalProductCreate() {
     try {
       const { error } = await criarProduto(supabase, {
         perfil_parceiro_id: partnerProfileId,
+        parceiro_id: partnerRowId,
         titulo: form.name.trim(),
         descricao: form.description.trim(),
         preco_euras: parsedPrice,
         url_imagem: form.imageUrl,
         ativo: true,
       })
-      if (error) throw error
 
+      if (error) throw error
       navigate('/portal-parceiro/produtos', { replace: true })
     } catch (error) {
       setFormError(getParceiroDataErrorMessage(error))
@@ -198,7 +233,7 @@ export default function PartnerPortalProductCreate() {
                 </label>
 
                 <label className="portal-product-field">
-                  <span>Instituição:</span>
+                  <span>Instituicao:</span>
                   <input type="text" value={institutionName} disabled />
                 </label>
 
@@ -231,7 +266,7 @@ export default function PartnerPortalProductCreate() {
                 </div>
 
                 <label className="portal-product-textarea-field">
-                  <span>Descrição (opcional):</span>
+                  <span>Descricao (opcional):</span>
                   <textarea value={form.description} onChange={handleFieldChange('description')} />
                 </label>
               </div>
@@ -239,7 +274,11 @@ export default function PartnerPortalProductCreate() {
           </article>
 
           <div className="portal-product-editor-actions portal-product-editor-actions-center">
-            <button type="submit" className="portal-product-primary-button" disabled={isSaving}>
+            <button
+              type="submit"
+              className="portal-product-primary-button"
+              disabled={isSaving || loadingPartner || (!partnerProfileId && !partnerRowId)}
+            >
               {isSaving ? 'Salvando...' : 'Adicionar produto'}
             </button>
           </div>

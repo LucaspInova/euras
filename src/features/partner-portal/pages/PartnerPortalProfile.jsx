@@ -5,7 +5,7 @@ import { supabase } from '../../../lib/supabase'
 import PartnerPortalLayout from '../components/PartnerPortalLayout'
 import {
   atualizarPerfil,
-  fetchParceiro,
+  fetchPerfilParceiroAtual,
   getParceiroDataErrorMessage,
 } from '../hooks/useParceiroData'
 
@@ -23,6 +23,24 @@ function CloseIcon() {
   )
 }
 
+function resolvePartnerUsername(row) {
+  if (!row) return ''
+
+  const candidates = [
+    row.nome_completo,
+    row.usuario_responsavel_nome,
+    row.nome_usuario,
+    row.nome,
+    row.username,
+  ]
+
+  const firstFilled = candidates.find(
+    (value) => typeof value === 'string' && value.trim(),
+  )
+
+  return firstFilled?.trim() ?? ''
+}
+
 export default function PartnerPortalProfile() {
   const navigate = useNavigate()
   const { user, signOut, resetPasswordForEmail } = useAuth()
@@ -30,7 +48,6 @@ export default function PartnerPortalProfile() {
   const [isSigningOut, setIsSigningOut] = useState(false)
   const [loadingProfile, setLoadingProfile] = useState(true)
   const [loadError, setLoadError] = useState('')
-  const [parceiroId, setParceiroId] = useState(null)
   const [nameValue, setNameValue] = useState('')
   const [emailValue, setEmailValue] = useState('')
   const [phoneValue, setPhoneValue] = useState('')
@@ -42,6 +59,13 @@ export default function PartnerPortalProfile() {
   const [resetPasswordSuccess, setResetPasswordSuccess] = useState('')
   const [isSendingResetPassword, setIsSendingResetPassword] = useState(false)
 
+  const applyProfileData = (data) => {
+    setNameValue(resolvePartnerUsername(data))
+    setEmailValue(data?.email ?? user?.email ?? '')
+    setPhoneValue(data?.telefone ?? '')
+    setCampusValue(data?.campus ?? '')
+  }
+
   useEffect(() => {
     let active = true
 
@@ -50,16 +74,12 @@ export default function PartnerPortalProfile() {
       setLoadError('')
 
       try {
-        const { data, error } = await fetchParceiro(supabase)
+        const { data, error } = await fetchPerfilParceiroAtual(supabase)
         if (error) throw error
 
         if (!active) return
 
-        setParceiroId(data?.id ?? null)
-        setNameValue(data?.usuario_responsavel_nome ?? '')
-        setEmailValue(data?.email ?? user?.email ?? '')
-        setPhoneValue(data?.telefone ?? '')
-        setCampusValue(data?.campus ?? '')
+        applyProfileData(data)
       } catch (error) {
         if (!active) return
         setLoadError(getParceiroDataErrorMessage(error))
@@ -75,6 +95,7 @@ export default function PartnerPortalProfile() {
     return () => {
       active = false
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user])
 
   const openSignOutModal = () => {
@@ -140,26 +161,34 @@ export default function PartnerPortalProfile() {
       return
     }
 
-    if (!parceiroId) {
-      setProfileSaveError('Perfil do parceiro não encontrado. Faça login novamente.')
-      return
-    }
-
     setIsSavingProfile(true)
     setProfileSaveError('')
     setProfileSaveSuccess('')
 
     try {
-      const { data, error } = await atualizarPerfil(supabase, parceiroId, {
-        usuario_responsavel_nome: nameValue,
-        telefone: phoneValue,
-        campus: campusValue,
+      const normalizedName = nameValue.trim()
+      if (!normalizedName) {
+        setProfileSaveError('Informe o nome de usuário.')
+        return
+      }
+
+      const normalizedPhone = phoneValue.trim()
+      const normalizedCampus = campusValue.trim()
+
+      const { error } = await atualizarPerfil(supabase, {
+        nome: normalizedName,
+        telefone: normalizedPhone,
+        campus: normalizedCampus,
       })
       if (error) throw error
 
-      setNameValue(data?.usuario_responsavel_nome ?? '')
-      setPhoneValue(data?.telefone ?? '')
-      setCampusValue(data?.campus ?? '')
+      const { data: refreshedProfile, error: refetchError } = await fetchPerfilParceiroAtual(
+        supabase,
+      )
+      if (refetchError) throw refetchError
+
+      applyProfileData(refreshedProfile)
+      setCampusValue((refreshedProfile?.campus ?? normalizedCampus) || '')
       setProfileSaveSuccess('Alterações salvas com sucesso.')
     } catch (error) {
       setProfileSaveError(getParceiroDataErrorMessage(error))

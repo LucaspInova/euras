@@ -1848,6 +1848,15 @@ body {
   font-size: 0.8rem;
 }
 
+.partner-card-image {
+  width: 100%;
+  min-height: 74px;
+  max-height: 92px;
+  border-radius: 6px;
+  object-fit: cover;
+  background: #efefef;
+}
+
 .partner-card strong {
   color: #171717;
   font-size: 1rem;

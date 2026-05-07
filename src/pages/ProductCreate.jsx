@@ -1,8 +1,8 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import SidebarLayout from '../components/SidebarLayout'
 import { buildOptimizedImageDataUrl } from '../lib/imageUpload'
-import { createProduct, getPartnerApiErrorMessage } from '../lib/partnersApi'
+import { createProduct, getPartnerApiErrorMessage, listPartners } from '../lib/partnersApi'
 
 function BackIcon() {
   return (
@@ -30,18 +30,74 @@ function ProductPhotoIcon() {
   )
 }
 
+function mapPartnerOption(partner) {
+  const profileId = partner?.profileId ?? partner?.id ?? null
+  if (!profileId) {
+    return null
+  }
+
+  return {
+    value: String(profileId),
+    label: partner?.name?.trim() || 'Parceiro',
+  }
+}
+
 export default function ProductCreate() {
   const navigate = useNavigate()
   const fileInputRef = useRef(null)
   const [formError, setFormError] = useState('')
   const [isSaving, setIsSaving] = useState(false)
+  const [loadingPartners, setLoadingPartners] = useState(true)
+  const [partnerOptions, setPartnerOptions] = useState([])
   const [form, setForm] = useState({
-    name: 'Bolsa 50%-',
-    institution: 'Ceeds Maracanaú',
-    value: '80,00',
-    description: 'Bolsa 50% para as mensalidades a partir do 2º semestre',
+    name: '',
+    partnerProfileId: '',
+    value: '',
+    description: '',
     imageUrl: '',
   })
+
+  useEffect(() => {
+    let active = true
+
+    async function loadPartners() {
+      setLoadingPartners(true)
+      setFormError('')
+
+      try {
+        const partners = await listPartners()
+        if (!active) return
+
+        const options = (partners ?? []).map(mapPartnerOption).filter(Boolean)
+        setPartnerOptions(options)
+
+        setForm((current) => {
+          if (current.partnerProfileId || options.length === 0) {
+            return current
+          }
+
+          return { ...current, partnerProfileId: options[0].value }
+        })
+
+        if (options.length === 0) {
+          setFormError('Nenhum parceiro ativo foi encontrado. Cadastre um parceiro antes de criar produtos.')
+        }
+      } catch (error) {
+        if (!active) return
+        setFormError(getPartnerApiErrorMessage(error))
+      } finally {
+        if (active) {
+          setLoadingPartners(false)
+        }
+      }
+    }
+
+    loadPartners()
+
+    return () => {
+      active = false
+    }
+  }, [])
 
   const handleFieldChange = (field) => (event) => {
     setForm((current) => ({ ...current, [field]: event.target.value }))
@@ -60,7 +116,7 @@ export default function ProductCreate() {
     }
 
     if (!file.type.startsWith('image/')) {
-      setFormError('Selecione um arquivo de imagem válido.')
+      setFormError('Selecione um arquivo de imagem valido.')
       return
     }
 
@@ -69,7 +125,7 @@ export default function ProductCreate() {
       setForm((current) => ({ ...current, imageUrl: optimizedImageDataUrl }))
       setFormError('')
     } catch (error) {
-      setFormError(error?.message ?? 'Não foi possível carregar essa imagem.')
+      setFormError(error?.message ?? 'Nao foi possivel carregar essa imagem.')
     }
   }
 
@@ -82,8 +138,8 @@ export default function ProductCreate() {
       return
     }
 
-    if (!form.institution.trim()) {
-      setFormError('Informe a instituição do produto.')
+    if (!form.partnerProfileId) {
+      setFormError('Selecione a instituicao do produto.')
       return
     }
 
@@ -95,9 +151,14 @@ export default function ProductCreate() {
     setIsSaving(true)
 
     try {
+      const selectedPartner = partnerOptions.find(
+        (option) => option.value === form.partnerProfileId,
+      )
+
       await createProduct({
         name: form.name.trim(),
-        institution: form.institution.trim(),
+        partnerProfileId: form.partnerProfileId,
+        institution: selectedPartner?.label ?? '',
         description: form.description.trim(),
         priceEuras: form.value.trim(),
         imageUrl: form.imageUrl,
@@ -138,8 +199,24 @@ export default function ProductCreate() {
                 </label>
 
                 <label className="product-create-field">
-                  <span>Instituição:</span>
-                  <input type="text" value={form.institution} onChange={handleFieldChange('institution')} />
+                  <span>Instituicao:</span>
+                  <select
+                    value={form.partnerProfileId}
+                    onChange={handleFieldChange('partnerProfileId')}
+                    disabled={loadingPartners || partnerOptions.length === 0}
+                  >
+                    {partnerOptions.length === 0 ? (
+                      <option value="">
+                        {loadingPartners ? 'Carregando parceiros...' : 'Nenhum parceiro disponivel'}
+                      </option>
+                    ) : null}
+
+                    {partnerOptions.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
                 </label>
 
                 <div className="product-create-value-block">
@@ -171,7 +248,7 @@ export default function ProductCreate() {
                 </div>
 
                 <label className="product-create-textarea-field">
-                  <span>Descrição (opcional):</span>
+                  <span>Descricao (opcional):</span>
                   <textarea value={form.description} onChange={handleFieldChange('description')} />
                 </label>
               </div>
@@ -179,7 +256,11 @@ export default function ProductCreate() {
           </section>
 
           <div className="product-create-submit-row">
-            <button type="submit" className="product-create-submit-button" disabled={isSaving}>
+            <button
+              type="submit"
+              className="product-create-submit-button"
+              disabled={isSaving || loadingPartners || partnerOptions.length === 0}
+            >
               {isSaving ? 'Salvando...' : 'Adicionar produto'}
             </button>
           </div>

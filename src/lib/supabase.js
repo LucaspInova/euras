@@ -17,6 +17,27 @@ function isTransientSupabaseError(error) {
   )
 }
 
+function isInvalidAuthSessionError(error) {
+  const joined = [
+    String(error?.message ?? ''),
+    String(error?.code ?? ''),
+    String(error?.name ?? ''),
+  ]
+    .join(' ')
+    .toLowerCase()
+
+  return (
+    joined.includes('session not found') ||
+    joined.includes('session missing') ||
+    joined.includes('refresh token') ||
+    joined.includes('invalid refresh token') ||
+    joined.includes('invalid jwt') ||
+    joined.includes('jwt expired') ||
+    joined.includes('invalid token') ||
+    joined.includes('invalid_grant')
+  )
+}
+
 async function withOperationTimeout(operationPromise, timeoutMessage, timeoutMs = SUPABASE_AUTH_TIMEOUT_MS) {
   let timeoutId = null
   const timeoutPromise = new Promise((_, reject) => {
@@ -92,13 +113,43 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   },
 })
 
-export async function ensureFreshSession({ minimumValiditySeconds = 90 } = {}) {
+async function verifySessionWithAuthServer(session) {
+  const { data, error } = await withOperationTimeout(
+    supabase.auth.getUser(session.access_token),
+    'Tempo limite ao validar a sessao com o servidor do Supabase.',
+  )
+
+  if (error) {
+    if (isInvalidAuthSessionError(error)) {
+      clearPersistedAuthTokens()
+      throw new Error('Sessao expirada. Faca login novamente.')
+    }
+
+    throw error
+  }
+
+  if (!data?.user?.id) {
+    clearPersistedAuthTokens()
+    throw new Error('Sessao expirada. Faca login novamente.')
+  }
+
+  return session
+}
+
+export async function ensureFreshSession({
+  minimumValiditySeconds = 90,
+  verifyServerSession = false,
+} = {}) {
   const { data, error } = await withOperationTimeout(
     supabase.auth.getSession(),
     'Tempo limite ao validar a sessão com o Supabase.',
   )
 
   if (error) {
+    const normalizedAuthError = String(error?.message ?? '').toLowerCase()
+    if (normalizedAuthError.includes('refresh token') || normalizedAuthError.includes('jwt')) {
+      clearPersistedAuthTokens()
+    }
     throw error
   }
 
@@ -111,7 +162,9 @@ export async function ensureFreshSession({ minimumValiditySeconds = 90 } = {}) {
   const now = Math.floor(Date.now() / 1000)
 
   if (!expiresAt || expiresAt - now > minimumValiditySeconds) {
-    return currentSession
+    return verifyServerSession
+      ? verifySessionWithAuthServer(currentSession)
+      : currentSession
   }
 
   if (!refreshSessionPromise) {
@@ -125,6 +178,9 @@ export async function ensureFreshSession({ minimumValiditySeconds = 90 } = {}) {
         if (refreshError) {
           if (attempt === 0 && isTransientSupabaseError(refreshError)) {
             continue
+          }
+          if (isInvalidAuthSessionError(refreshError)) {
+            clearPersistedAuthTokens()
           }
           throw refreshError
         }
@@ -140,5 +196,8 @@ export async function ensureFreshSession({ minimumValiditySeconds = 90 } = {}) {
     })
   }
 
-  return refreshSessionPromise
+  const refreshedSession = await refreshSessionPromise
+  return verifyServerSession
+    ? verifySessionWithAuthServer(refreshedSession)
+    : refreshedSession
 }

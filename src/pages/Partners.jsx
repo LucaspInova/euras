@@ -38,48 +38,6 @@ function normalize(text) {
   return text.normalize('NFD').replace(/\p{Diacritic}/gu, '').toUpperCase()
 }
 
-const PREVIEW_PARTNERS_TARGET = 56
-const PREVIEW_CAMPUSES = ['MARACANAU', 'FORTALEZA', 'CAUCAIA', 'EUSEBIO', 'SOBRAL']
-
-function buildPreviewPartners(sourcePartners) {
-  if (!Array.isArray(sourcePartners) || sourcePartners.length === 0) {
-    return Array.from({ length: PREVIEW_PARTNERS_TARGET }).map((_, index) => ({
-      id: `preview-partner-seed-${index + 1}`,
-      name: `PARCEIRO DEMO ${String(index + 1).padStart(3, '0')}`,
-      user: `RESPONSAVEL ${String(index + 1).padStart(3, '0')}`,
-      phone: '',
-      email: '',
-      campus: PREVIEW_CAMPUSES[index % PREVIEW_CAMPUSES.length],
-      imageUrl: '',
-      group: index % 3 === 0 ? 'ceeds' : 'external',
-      logo: index % 3 === 0 ? 'CEEDS' : `P${String(index + 1).padStart(2, '0')}`,
-      variant: index % 2 === 0 ? 'light' : 'black',
-      previewOnly: true,
-    }))
-  }
-
-  const expanded = [...sourcePartners]
-  let cursor = 0
-
-  while (expanded.length < PREVIEW_PARTNERS_TARGET) {
-    const source = sourcePartners[cursor % sourcePartners.length]
-    const cloneNumber = expanded.length + 1
-    const campus = PREVIEW_CAMPUSES[cursor % PREVIEW_CAMPUSES.length]
-
-    expanded.push({
-      ...source,
-      id: `preview-partner-${source.id}-${cloneNumber}`,
-      sourceId: source.id,
-      name: `${source.name} UNIDADE ${String(cloneNumber).padStart(2, '0')}`,
-      campus,
-    })
-
-    cursor += 1
-  }
-
-  return expanded
-}
-
 export default function Partners() {
   const navigate = useNavigate()
   const [partners, setPartners] = useState([])
@@ -117,10 +75,8 @@ export default function Partners() {
     }
   }, [])
 
-  const previewPartners = useMemo(() => buildPreviewPartners(partners), [partners])
-
   const filteredCeeds = useMemo(() => {
-    const ceedsPartners = previewPartners.filter((partner) => partner.group === 'ceeds')
+    const ceedsPartners = partners.filter((partner) => partner.group === 'ceeds')
     const search = normalize(searchTerm.trim())
 
     if (!search) {
@@ -128,10 +84,10 @@ export default function Partners() {
     }
 
     return ceedsPartners.filter((partner) => normalize(`${partner.name} ${partner.campus}`).includes(search))
-  }, [previewPartners, searchTerm])
+  }, [partners, searchTerm])
 
   const filteredExternal = useMemo(() => {
-    const externalPartners = previewPartners.filter((partner) => partner.group === 'external')
+    const externalPartners = partners.filter((partner) => partner.group === 'external')
     const search = normalize(searchTerm.trim())
 
     if (!search) {
@@ -139,7 +95,9 @@ export default function Partners() {
     }
 
     return externalPartners.filter((partner) => normalize(`${partner.name} ${partner.campus}`).includes(search))
-  }, [previewPartners, searchTerm])
+  }, [partners, searchTerm])
+
+  const hasNoPartners = !loadingPartners && !loadError && partners.length === 0
 
   return (
     <SidebarLayout>
@@ -174,6 +132,7 @@ export default function Partners() {
 
           {loadingPartners ? <div className="students-empty-state">Carregando parceiros...</div> : null}
           {loadError && !loadingPartners ? <div className="students-empty-state">{loadError}</div> : null}
+          {hasNoPartners ? <div className="students-empty-state">Nenhum parceiro cadastrado.</div> : null}
 
           <div className="partners-grid partners-grid-ceeds">
             {!loadingPartners && !loadError
@@ -183,12 +142,20 @@ export default function Partners() {
                   type="button"
                   className="partner-card-logo partner-card-link"
                   onClick={() => {
-                    if (!partner.previewOnly) {
-                      navigate(`/parceiros/${partner.sourceId ?? partner.id}`)
-                    }
+                    navigate(`/parceiros/${partner.id}`)
                   }}
                 >
-                  <PartnerLogo label="CEEDS" variant="light" />
+                  {partner.imageUrl ? (
+                    <img
+                      src={partner.imageUrl}
+                      alt={partner.name}
+                      className="partner-card-image"
+                      loading="lazy"
+                      decoding="async"
+                    />
+                  ) : (
+                    <PartnerLogo label="CEEDS" variant="light" />
+                  )}
                   <p>{partner.campus}</p>
                 </button>
                 <strong>{partner.name}</strong>
@@ -209,12 +176,20 @@ export default function Partners() {
                   type="button"
                   className="partner-card-logo partner-card-link"
                   onClick={() => {
-                    if (!partner.previewOnly) {
-                      navigate(`/parceiros/${partner.sourceId ?? partner.id}`)
-                    }
+                    navigate(`/parceiros/${partner.id}`)
                   }}
                 >
-                  <PartnerLogo label={partner.logo} variant={partner.variant} />
+                  {partner.imageUrl ? (
+                    <img
+                      src={partner.imageUrl}
+                      alt={partner.name}
+                      className="partner-card-image"
+                      loading="lazy"
+                      decoding="async"
+                    />
+                  ) : (
+                    <PartnerLogo label={partner.logo} variant={partner.variant} />
+                  )}
                   <p>{partner.campus}</p>
                 </button>
                 <strong>{partner.name}</strong>

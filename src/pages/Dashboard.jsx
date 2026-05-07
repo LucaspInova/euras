@@ -29,7 +29,7 @@ export default function Dashboard() {
         <article className="metric-card">
           <h3>Euras ativas</h3>
           <p>
-            <span className="metric-gold">&lt;</span> 92.814<span className="small-number">,00</span>
+            <span className="metric-gold">&lt;</span> 2.034<span className="small-number">,00</span>
           </p>
         </article>
         <article className="metric-card">

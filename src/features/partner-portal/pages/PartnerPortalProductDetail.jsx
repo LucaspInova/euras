@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Navigate, useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from '../../../context/AuthContext'
+import { buildOptimizedImageDataUrl } from '../../../lib/imageUpload'
 import { supabase } from '../../../lib/supabase'
 import PartnerPortalLayout from '../components/PartnerPortalLayout'
 import {
@@ -176,6 +177,7 @@ export default function PartnerPortalProductDetail() {
 
   const handleImageChange = async (event) => {
     const file = event.target.files?.[0]
+    event.target.value = ''
 
     if (!file) {
       return
@@ -183,16 +185,16 @@ export default function PartnerPortalProductDetail() {
 
     if (!file.type.startsWith('image/')) {
       setFormError('Selecione um arquivo de imagem válido.')
-      event.target.value = ''
       return
     }
 
-    setFormError('')
-
-    const objectUrl = URL.createObjectURL(file)
-    setForm((current) => ({ ...current, imageUrl: objectUrl }))
-
-    event.target.value = ''
+    try {
+      const optimizedImageDataUrl = await buildOptimizedImageDataUrl(file)
+      setForm((current) => ({ ...current, imageUrl: optimizedImageDataUrl }))
+      setFormError('')
+    } catch (error) {
+      setFormError(error?.message ?? 'NÃ£o foi possÃ­vel carregar essa imagem.')
+    }
   }
 
   const hasChanges = useMemo(() => {
