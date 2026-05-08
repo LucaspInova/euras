@@ -189,7 +189,7 @@ export default function Products() {
             {showFilters ? (
               <div className="products-filter-popover">
                 <label className="products-filter-row">
-                  <span>InstituiÃ§Ã£o:</span>
+                  <span>Parceiro:</span>
                   <select
                     value={selectedInstitution}
                     onChange={(event) => setSelectedInstitution(event.target.value)}
