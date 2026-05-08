@@ -1,0 +1,12 @@
+{
+  "expo": {
+    "extra": {
+      "eas": {
+        "projectId": "cb9a72e6-3e9c-4ac0-8d5b-a96468dbcd67"
+      }
+    },
+    "android": {
+      "package": "com.lucassnp.ceedsapp"
+    }
+  }
+}
