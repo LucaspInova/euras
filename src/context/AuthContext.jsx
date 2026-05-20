@@ -441,6 +441,28 @@ export function AuthProvider({ children }) {
     }
   }
 
+  const updatePassword = async (password) => {
+    setAuthError('')
+
+    try {
+      const { data, error } = await runGuardedAuthTask(
+        () =>
+          supabase.auth.updateUser({
+            password,
+          }),
+        {
+          timeoutMs: SIGN_IN_TIMEOUT_MS,
+          timeoutMessage:
+            'Tempo limite ao alterar a senha. Verifique sua conexao e tente novamente.',
+        },
+      )
+
+      return { data, error }
+    } catch (error) {
+      return { data: null, error }
+    }
+  }
+
   const refreshProfile = async () => {
     if (!user?.id) {
       setProfile(null)
@@ -597,6 +619,7 @@ export function AuthProvider({ children }) {
     signInWithPassword,
     signInWithGoogle,
     resetPasswordForEmail,
+    updatePassword,
     refreshProfile,
     updateProfile,
     signOut,

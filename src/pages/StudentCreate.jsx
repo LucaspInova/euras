@@ -33,6 +33,7 @@ export default function StudentCreate() {
     campus: 'MARACANAU',
     course: 'ENGENHARIA CIVIL',
     email: '',
+    password: '',
   })
 
   const handleChange = (field) => (event) => {
@@ -58,6 +59,16 @@ export default function StudentCreate() {
       return
     }
 
+    if (!form.email.trim() || !form.password.trim()) {
+      setFormError('Preencha obrigatoriamente E-mail e Senha para adicionar o aluno.')
+      return
+    }
+
+    if (form.password.trim().length < 6) {
+      setFormError('A senha deve ter no mínimo 6 caracteres.')
+      return
+    }
+
     setIsSaving(true)
 
     try {
@@ -68,6 +79,7 @@ export default function StudentCreate() {
         phone: form.phone,
         entryDate: form.entryDate,
         email: form.email,
+        password: form.password,
       })
 
       navigate('/alunos')
@@ -162,6 +174,20 @@ export default function StudentCreate() {
                     value={form.email}
                     onChange={handleChange('email')}
                     placeholder="aluno123@test.com"
+                    required
+                  />
+                </label>
+
+                <label className="student-field">
+                  <span>Senha:</span>
+                  <input
+                    type="password"
+                    autoComplete="new-password"
+                    value={form.password}
+                    onChange={handleChange('password')}
+                    placeholder="Digite a senha"
+                    minLength={6}
+                    required
                   />
                 </label>
               </div>

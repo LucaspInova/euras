@@ -637,6 +637,31 @@ async function replacePartnerSchedule(partnerId, schedule) {
   }
 }
 
+async function loadInstitutionsFromProfiles(profileIds) {
+  const result = new Map();
+
+  if (!Array.isArray(profileIds) || profileIds.length === 0) {
+    return result;
+  }
+
+  const { data: profileRows, error: profileError } = await euras
+    .from("perfis")
+    .select("id, nome_completo")
+    .in("id", profileIds)
+    .eq("papel", "parceiro")
+    .eq("ativo", true);
+
+  if (profileError) {
+    throw profileError;
+  }
+
+  for (const row of profileRows ?? []) {
+    result.set(row.id, row.nome_completo ?? "Parceiro");
+  }
+
+  return result;
+}
+
 async function loadInstitutionsByProfileIds(profileIds) {
   const result = new Map();
 
@@ -649,34 +674,17 @@ async function loadInstitutionsByProfileIds(profileIds) {
     .select("perfil_parceiro_id, nome_instituicao, ativo")
     .in("perfil_parceiro_id", profileIds);
 
-  if (partnerError && !isMissingRelationError(partnerError)) {
+  if (partnerError) {
+    if (isMissingRelationError(partnerError)) {
+      return loadInstitutionsFromProfiles(profileIds);
+    }
+
     throw partnerError;
   }
 
   for (const row of partnerRows ?? []) {
     if (row.ativo === false) continue;
     result.set(row.perfil_parceiro_id, row.nome_instituicao ?? "Parceiro");
-  }
-
-  const missingProfileIds = profileIds.filter(
-    (profileId) => !result.has(profileId),
-  );
-
-  if (missingProfileIds.length === 0) {
-    return result;
-  }
-
-  const { data: profileRows, error: profileError } = await euras
-    .from("perfis")
-    .select("id, nome_completo")
-    .in("id", missingProfileIds);
-
-  if (profileError) {
-    throw profileError;
-  }
-
-  for (const row of profileRows ?? []) {
-    result.set(row.id, row.nome_completo ?? "Parceiro");
   }
 
   return result;
@@ -700,24 +708,28 @@ async function resolvePartnerProfileIdByInstitution(institution) {
     throw partnerError;
   }
 
+  if (partnerError && isMissingRelationError(partnerError)) {
+    const { data: profileRow, error: profileError } = await euras
+      .from("perfis")
+      .select("id")
+      .eq("papel", "parceiro")
+      .ilike("nome_completo", normalizedInstitution)
+      .eq("ativo", true)
+      .limit(1)
+      .maybeSingle();
+
+    if (profileError) {
+      throw profileError;
+    }
+
+    return profileRow?.id ?? null;
+  }
+
   if (partnerRow?.perfil_parceiro_id) {
     return partnerRow.perfil_parceiro_id;
   }
 
-  const { data: profileRow, error: profileError } = await euras
-    .from("perfis")
-    .select("id")
-    .eq("papel", "parceiro")
-    .ilike("nome_completo", normalizedInstitution)
-    .eq("ativo", true)
-    .limit(1)
-    .maybeSingle();
-
-  if (profileError) {
-    throw profileError;
-  }
-
-  return profileRow?.id ?? null;
+  return null;
 }
 
 async function getRawPartnerById(partnerId) {
@@ -797,6 +809,26 @@ async function getRawPartnerProductById(profileId, productId) {
   }
 
   return data;
+}
+
+async function deactivateProductsByPartnerProfileId(profileId) {
+  if (!profileId) {
+    return;
+  }
+
+  const { error } = await euras
+    .from("produtos")
+    .update({ ativo: false })
+    .eq("perfil_parceiro_id", profileId)
+    .eq("ativo", true);
+
+  if (error) {
+    if (isMissingRelationError(error)) {
+      return;
+    }
+
+    throw error;
+  }
 }
 
 export function getPartnerApiErrorMessage(error) {
@@ -1125,6 +1157,8 @@ export async function removePartner(partnerId) {
       throw new Error("Parceiro nÃ£o encontrado.");
     }
 
+    await deactivateProductsByPartnerProfileId(partnerId);
+
     invalidateProductCaches(partnerId);
     return;
   }
@@ -1147,6 +1181,8 @@ export async function removePartner(partnerId) {
     if (profileError) {
       throw profileError;
     }
+
+    await deactivateProductsByPartnerProfileId(partnerRow.perfil_parceiro_id);
   }
 
   invalidateProductCaches(partnerId);
@@ -1373,6 +1409,9 @@ export async function listProducts() {
       await loadInstitutionsByProfileIds(profileIds);
 
     const mappedProducts = products
+      .filter((product) =>
+        institutionByProfileId.has(product.perfil_parceiro_id),
+      )
       .map((product) => mapCatalogProduct(product, institutionByProfileId))
       .sort((a, b) => a.name.localeCompare(b.name));
 
@@ -1461,6 +1500,11 @@ export async function getProductById(productId) {
   const institutionByProfileId = await loadInstitutionsByProfileIds([
     product.perfil_parceiro_id,
   ]);
+
+  if (!institutionByProfileId.has(product.perfil_parceiro_id)) {
+    return null;
+  }
+
   return mapCatalogProduct(product, institutionByProfileId);
 }
 

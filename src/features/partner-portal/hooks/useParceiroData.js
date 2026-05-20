@@ -417,6 +417,23 @@ export async function fetchAtividadesConcedidas(supabase, parceiroProfileId, lim
   return fetchAtividadesParceiro(supabase, parceiroProfileId, limit)
 }
 
+async function recusarResgateComEstorno(supabase, resgateId, motivo) {
+  const motivoRecusa = String(motivo ?? '').trim()
+
+  if (!motivoRecusa) {
+    return { data: null, error: new Error('Informe o motivo para recusar a solicitacao.') }
+  }
+
+  const { data, error } = await supabase
+    .schema('euras')
+    .rpc('recusar_resgate_parceiro', {
+      p_resgate_id: resgateId,
+      p_motivo: motivoRecusa,
+    })
+
+  return { data, error }
+}
+
 export async function atualizarStatusResgate(supabase, resgateId, novoStatus, userId, motivo = null) {
   const context = await resolveLoggedPartnerContext(supabase)
   const confirmedByProfileId = context.profileId ?? userId ?? null
@@ -425,14 +442,14 @@ export async function atualizarStatusResgate(supabase, resgateId, novoStatus, us
     return { data: null, error: new Error('Sessao expirada. Faca login novamente.') }
   }
 
+  if (novoStatus === 'cancelado') {
+    return recusarResgateComEstorno(supabase, resgateId, motivo)
+  }
+
   const campos = {
     status: novoStatus,
     confirmado_por: confirmedByProfileId,
     confirmado_em: new Date().toISOString(),
-  }
-
-  if (novoStatus === 'cancelado') {
-    campos.motivo_recusa = String(motivo ?? '').trim()
   }
 
   const { data, error } = await supabase
@@ -612,8 +629,35 @@ export function getParceiroDataErrorMessage(error) {
     return 'Conexão com o banco demorou demais. Tente novamente em instantes.'
   }
 
+  if (
+    error?.code === 'over_email_send_rate_limit' ||
+    error?.status === 429 ||
+    normalized.includes('no new code') ||
+    normalized.includes('codigo novo') ||
+    normalized.includes('too many') ||
+    normalized.includes('rate limit')
+  ) {
+    return 'O Supabase limitou o envio de codigos por seguranca. Aguarde alguns minutos antes de tentar novamente.'
+  }
+
+  if (error?.code === 'weak_password' || normalized.includes('weak password')) {
+    return 'A senha informada e fraca. Use uma senha maior ou mais dificil de adivinhar.'
+  }
+
+  if (error?.code === 'reauthentication_needed') {
+    return 'Por seguranca, faca login novamente antes de alterar a senha.'
+  }
+
   if (normalized.includes('sessao expirada') || normalized.includes('sessao invalida')) {
     return 'Sua sessão expirou. Faça login novamente.'
+  }
+
+  if (
+    normalized.includes('recusar_resgate_parceiro') ||
+    normalized.includes('function') ||
+    normalized.includes('funcao')
+  ) {
+    return 'Funcao de estorno do resgate nao encontrada. Aplique a migration de recusa com estorno no Supabase.'
   }
 
   if (normalized.includes('row-level security')) {

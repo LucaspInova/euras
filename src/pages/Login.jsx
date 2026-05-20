@@ -47,12 +47,22 @@ function EyeIcon({ visible }) {
 
 export default function Login() {
   const navigate = useNavigate();
-  const { user, role, loading, profileLoading, authError, signInWithPassword, signInWithGoogle } = useAuth();
+  const {
+    user,
+    role,
+    loading,
+    profileLoading,
+    authError,
+    signInWithPassword,
+    signInWithGoogle,
+    resetPasswordForEmail,
+  } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [formError, setFormError] = useState("");
+  const [formSuccess, setFormSuccess] = useState("");
 
   useEffect(() => {
     if (!loading && !profileLoading && user && isSupportedRole(role)) {
@@ -69,13 +79,27 @@ export default function Login() {
       ? authError
       : "";
 
-  const handleNoAction = (event) => {
-    event.preventDefault();
+  const getRecoverPasswordErrorMessage = (error) => {
+    const rawMessage = error?.message?.toLowerCase() || "";
+
+    if (
+      error?.code === "over_email_send_rate_limit" ||
+      error?.status === 429 ||
+      rawMessage.includes("no new code") ||
+      rawMessage.includes("codigo novo") ||
+      rawMessage.includes("too many") ||
+      rawMessage.includes("rate limit")
+    ) {
+      return "Nao foi enviado codigo novo. Aguarde alguns minutos antes de tentar novamente.";
+    }
+
+    return error?.message || "Nao foi possivel enviar o codigo agora.";
   };
 
   const handlePasswordLogin = async (event) => {
     event.preventDefault();
     setFormError("");
+    setFormSuccess("");
 
     if (!email || !password) {
       setFormError("Preencha e-mail e senha para continuar.");
@@ -127,6 +151,7 @@ export default function Login() {
 
   const handleGoogleLogin = async () => {
     setFormError("");
+    setFormSuccess("");
     setIsLoading(true);
 
     const { error } = await signInWithGoogle();
@@ -136,6 +161,30 @@ export default function Login() {
     if (error) {
       setFormError(error.message || "Não foi possível iniciar o login com Google.");
     }
+  };
+
+  const handleForgotPassword = async () => {
+    setFormError("");
+    setFormSuccess("");
+
+    const normalizedEmail = email.trim();
+    if (!normalizedEmail) {
+      setFormError("Informe seu e-mail para receber o codigo de redefinicao.");
+      return;
+    }
+
+    setIsLoading(true);
+
+    const { error } = await resetPasswordForEmail(normalizedEmail);
+
+    setIsLoading(false);
+
+    if (error) {
+      setFormError(getRecoverPasswordErrorMessage(error));
+      return;
+    }
+
+    setFormSuccess(`Enviamos as instrucoes para ${normalizedEmail}.`);
   };
 
   return (
@@ -188,6 +237,12 @@ export default function Login() {
             </p>
           )}
 
+          {formSuccess && (
+            <p className="form-message">
+              {formSuccess}
+            </p>
+          )}
+
           <button className="primary-button" type="submit" disabled={isLoading}>
             {isLoading ? "Entrando..." : "Continuar"}
           </button>
@@ -209,7 +264,8 @@ export default function Login() {
           <button
             className="forgot-password-link"
             type="button"
-            onClick={handleNoAction}
+            onClick={handleForgotPassword}
+            disabled={isLoading}
           >
             Esqueci minha senha.
           </button>

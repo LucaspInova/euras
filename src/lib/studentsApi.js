@@ -1,7 +1,16 @@
+import {
+  FunctionsFetchError,
+  FunctionsHttpError,
+  FunctionsRelayError,
+} from '@supabase/supabase-js'
 import { centsToBalance } from './studentFormatters'
 import { ensureFreshSession, supabase } from './supabase'
 
 const euras = supabase.schema('euras')
+const STUDENT_CREATE_FUNCTION_NAME = 'criar-aluno'
+const STUDENT_REMOVE_FUNCTION_NAME = 'remover-aluno'
+const STUDENT_CREATE_TIMEOUT_MS = 22000
+const STUDENT_REMOVE_TIMEOUT_MS = 22000
 
 function normalizeUpper(value) {
   return value?.trim().toUpperCase() ?? ''
@@ -75,6 +84,200 @@ function isEmailAlreadyExistsError(error) {
     error?.code === 'email_exists' ||
     Number(error?.status) === 422
   )
+}
+
+function createStudentFunctionTimeout() {
+  const error = new Error('Tempo limite ao criar o aluno com seguranca no servidor.')
+  error.code = 'student_create_timeout'
+  return error
+}
+
+async function parseFunctionHttpError(error) {
+  const status = Number(error?.context?.status ?? 0) || 0
+  let payload = null
+
+  try {
+    payload = await error.context.json()
+  } catch {
+    payload = null
+  }
+
+  const payloadError = payload?.error ?? {}
+  const message =
+    payloadError?.message ??
+    payload?.message ??
+    (status === 404
+      ? 'Funcao segura de cadastro de aluno nao encontrada.'
+      : 'Falha ao criar aluno pelo endpoint seguro.')
+
+  const wrappedError = new Error(message)
+  wrappedError.code =
+    payloadError?.code ??
+    payload?.code ??
+    error?.name ??
+    'edge_function_http_error'
+  wrappedError.details = payloadError?.details ?? payload?.details
+  wrappedError.hint = payloadError?.hint ?? payload?.hint
+  wrappedError.status = status || payload?.status
+  wrappedError.cause = error
+
+  return wrappedError
+}
+
+async function normalizeStudentCreateFunctionError(error) {
+  if (error instanceof FunctionsHttpError) {
+    return parseFunctionHttpError(error)
+  }
+
+  if (error instanceof FunctionsRelayError) {
+    const wrappedError = new Error(
+      'Falha ao encaminhar o cadastro seguro para o Supabase Functions.',
+    )
+    wrappedError.code = 'edge_function_relay_error'
+    wrappedError.cause = error
+    return wrappedError
+  }
+
+  if (error instanceof FunctionsFetchError) {
+    const wrappedError = new Error(
+      'Nao foi possivel conectar ao endpoint seguro de cadastro de aluno.',
+    )
+    wrappedError.code = 'edge_function_fetch_error'
+    wrappedError.cause = error
+    return wrappedError
+  }
+
+  return error instanceof Error
+    ? error
+    : new Error('Falha inesperada ao criar aluno no servidor.')
+}
+
+async function normalizeStudentRemoveFunctionError(error) {
+  if (error instanceof FunctionsHttpError) {
+    const status = Number(error?.context?.status ?? 0) || 0
+    let payload = null
+
+    try {
+      payload = await error.context.json()
+    } catch {
+      payload = null
+    }
+
+    const payloadError = payload?.error ?? {}
+    const message =
+      payloadError?.message ??
+      payload?.message ??
+      (status === 404
+        ? 'Funcao segura de remocao de aluno nao encontrada.'
+        : 'Falha ao remover aluno pelo endpoint seguro.')
+
+    const wrappedError = new Error(message)
+    wrappedError.code =
+      payloadError?.code ??
+      payload?.code ??
+      error?.name ??
+      'edge_function_http_error'
+    wrappedError.details = payloadError?.details ?? payload?.details
+    wrappedError.hint = payloadError?.hint ?? payload?.hint
+    wrappedError.status = status || payload?.status
+    wrappedError.cause = error
+
+    return wrappedError
+  }
+
+  if (error instanceof FunctionsRelayError) {
+    const wrappedError = new Error(
+      'Falha ao encaminhar a remocao segura para o Supabase Functions.',
+    )
+    wrappedError.code = 'edge_function_relay_error'
+    wrappedError.cause = error
+    return wrappedError
+  }
+
+  if (error instanceof FunctionsFetchError) {
+    const wrappedError = new Error(
+      'Nao foi possivel conectar ao endpoint seguro de remocao de aluno.',
+    )
+    wrappedError.code = 'edge_function_fetch_error'
+    wrappedError.cause = error
+    return wrappedError
+  }
+
+  return error instanceof Error
+    ? error
+    : new Error('Falha inesperada ao remover aluno no servidor.')
+}
+
+async function invokeSecureStudentCreate(payload, session) {
+  let timeoutId = null
+  const timeoutPromise = new Promise((_, reject) => {
+    timeoutId = setTimeout(
+      () => reject(createStudentFunctionTimeout()),
+      STUDENT_CREATE_TIMEOUT_MS,
+    )
+  })
+
+  try {
+    return await Promise.race([
+      supabase.functions.invoke(STUDENT_CREATE_FUNCTION_NAME, {
+        body: payload,
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+      }),
+      timeoutPromise,
+    ])
+  } finally {
+    if (timeoutId !== null) {
+      clearTimeout(timeoutId)
+    }
+  }
+}
+
+async function invokeSecureStudentRemove(payload, session) {
+  let timeoutId = null
+  const timeoutPromise = new Promise((_, reject) => {
+    timeoutId = setTimeout(() => {
+      const error = new Error('Tempo limite ao remover o aluno com seguranca no servidor.')
+      error.code = 'student_remove_timeout'
+      reject(error)
+    }, STUDENT_REMOVE_TIMEOUT_MS)
+  })
+
+  try {
+    return await Promise.race([
+      supabase.functions.invoke(STUDENT_REMOVE_FUNCTION_NAME, {
+        body: payload,
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+      }),
+      timeoutPromise,
+    ])
+  } finally {
+    if (timeoutId !== null) {
+      clearTimeout(timeoutId)
+    }
+  }
+}
+
+async function createStudentFromSecureServer(payload, session) {
+  const { data, error } = await invokeSecureStudentCreate(payload, session)
+
+  if (error) {
+    throw await normalizeStudentCreateFunctionError(error)
+  }
+
+  const studentId = data?.studentId ?? data?.aluno_id ?? data?.profileId ?? data?.perfil_id ?? null
+
+  if (!studentId) {
+    throw new Error('Cadastro criado sem identificador de aluno retornado pelo servidor.')
+  }
+
+  return {
+    studentId,
+    profileId: data?.profileId ?? null,
+  }
 }
 
 function mapStudent(row) {
@@ -316,6 +519,18 @@ export function getStudentApiErrorMessage(error) {
     return 'Este e-mail já possui uma conta no sistema. Verifique se o aluno já existe ou use outro e-mail.'
   }
 
+  if (
+    normalizedMessage.includes('criar-aluno') ||
+    normalizedMessage.includes('remover-aluno') ||
+    normalizedMessage.includes('cadastro de aluno nao encontrada') ||
+    normalizedMessage.includes('remocao de aluno nao encontrada')
+  ) {
+    return normalizedMessage.includes('remover-aluno') ||
+      normalizedMessage.includes('remocao de aluno nao encontrada')
+      ? 'Funcao segura de remocao nao encontrada. Faca o deploy da edge function remover-aluno.'
+      : 'Funcao segura de cadastro nao encontrada. Faca o deploy da edge function criar-aluno.'
+  }
+
   if (error?.code === '23503') {
     return 'Não foi possível concluir a operação por referência inválida entre tabelas.'
   }
@@ -392,48 +607,34 @@ export async function getStudentById(studentId) {
 }
 
 export async function createStudent(student) {
-  await ensureFreshSession()
+  const session = await ensureFreshSession()
 
   const name = normalizeUpper(student?.name)
   const campus = normalizeUpper(student?.campus)
   const course = normalizeUpper(student?.course)
+  const email = student?.email?.trim().toLowerCase() ?? ''
+  const password = student?.password?.trim() ?? ''
   const entryDate = parseDateBr(student?.entryDate?.trim() ?? '')
 
-  if (!name || !campus || !course || !entryDate) {
-    throw new Error('Preencha nome, campus, curso e uma data valida no formato dd/mm/aaaa.')
+  if (!name || !campus || !course || !email || !password || !entryDate) {
+    throw new Error('Preencha nome, campus, curso, e-mail, senha e uma data valida no formato dd/mm/aaaa.')
+  }
+
+  if (password.length < 6) {
+    throw new Error('A senha deve ter no minimo 6 caracteres.')
   }
 
   const payload = {
     nome_completo: name,
-    papel: 'aluno',
     telefone: student?.phone?.trim() ?? '',
-    email: student?.email?.trim() ?? '',
+    email,
+    senha: password,
     campus,
     curso: course,
     data_entrada: entryDate,
-    ativo: true,
   }
 
-  const { data: profile, error } = await euras
-    .from('perfis')
-    .insert(payload)
-    .select('id')
-    .single()
-
-  if (error) {
-    if (isEmailAlreadyExistsError(error)) {
-      const duplicateEmailError = new Error(
-        'Este e-mail já possui uma conta no sistema. Verifique se o aluno já existe ou use outro e-mail.',
-      )
-      duplicateEmailError.code = error.code ?? 'email_exists'
-      duplicateEmailError.status = error.status ?? 422
-      throw duplicateEmailError
-    }
-
-    throw error
-  }
-
-  await upsertLegacyStudentIfPresent(profile.id, payload)
+  await createStudentFromSecureServer(payload, session)
 }
 
 export async function updateStudent(studentId, updates) {
@@ -488,26 +689,12 @@ export async function updateStudent(studentId, updates) {
 }
 
 export async function removeStudent(studentId) {
-  await ensureFreshSession()
+  const session = await ensureFreshSession()
 
-  const { data, error } = await euras
-    .from('perfis')
-    .update({ ativo: false })
-    .eq('id', studentId)
-    .eq('papel', 'aluno')
-    .eq('ativo', true)
-    .select('id')
-    .maybeSingle()
-
+  const { error } = await invokeSecureStudentRemove({ studentId }, session)
   if (error) {
-    throw error
+    throw await normalizeStudentRemoveFunctionError(error)
   }
-
-  if (!data) {
-    throw new Error('Aluno não encontrado.')
-  }
-
-  await setLegacyStudentActiveIfPresent(studentId, false)
 }
 
 export async function addStudentCredit({ studentId, amountInEuras, amountInCents, createdBy, note }) {

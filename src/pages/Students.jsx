@@ -59,45 +59,6 @@ function AddIcon() {
   )
 }
 
-const PREVIEW_STUDENTS_TARGET = 120
-const PREVIEW_CAMPUSES = ['MARACANAU', 'FORTALEZA', 'CAUCAIA', 'EUSEBIO', 'SOBRAL']
-const PREVIEW_COURSES = ['ADMINISTRACAO', 'INFORMATICA', 'ENFERMAGEM', 'DESIGN', 'MARKETING']
-
-function buildPreviewStudents(sourceStudents) {
-  if (!Array.isArray(sourceStudents) || sourceStudents.length === 0) {
-    return Array.from({ length: PREVIEW_STUDENTS_TARGET }).map((_, index) => ({
-      id: `preview-student-seed-${index + 1}`,
-      name: `ALUNO DEMO ${String(index + 1).padStart(3, '0')}`,
-      course: PREVIEW_COURSES[index % PREVIEW_COURSES.length],
-      campus: PREVIEW_CAMPUSES[index % PREVIEW_CAMPUSES.length],
-      previewOnly: true,
-    }))
-  }
-
-  const expanded = [...sourceStudents]
-  let cursor = 0
-
-  while (expanded.length < PREVIEW_STUDENTS_TARGET) {
-    const source = sourceStudents[cursor % sourceStudents.length]
-    const cloneNumber = expanded.length + 1
-    const campus = PREVIEW_CAMPUSES[cursor % PREVIEW_CAMPUSES.length]
-    const course = PREVIEW_COURSES[cursor % PREVIEW_COURSES.length]
-
-    expanded.push({
-      ...source,
-      id: `preview-student-${source.id}-${cloneNumber}`,
-      sourceId: source.id,
-      name: `${source.name} TURMA ${String(cloneNumber).padStart(3, '0')}`,
-      campus,
-      course,
-    })
-
-    cursor += 1
-  }
-
-  return expanded
-}
-
 export default function Students() {
   const navigate = useNavigate()
   const location = useLocation()
@@ -175,34 +136,36 @@ export default function Students() {
     }
   }, [location.pathname, location.state, navigate])
 
-  const previewStudents = useMemo(() => buildPreviewStudents(students), [students])
-
   const campusOptions = useMemo(
-    () => ['TODAS', ...new Set(previewStudents.map((student) => student.campus))],
-    [previewStudents],
+    () => ['TODAS', ...new Set(students.map((student) => student.campus).filter(Boolean))],
+    [students],
   )
 
   const courseOptions = useMemo(
-    () => ['TODOS', ...new Set(previewStudents.map((student) => student.course))],
-    [previewStudents],
+    () => ['TODOS', ...new Set(students.map((student) => student.course).filter(Boolean))],
+    [students],
   )
 
   const filteredStudents = useMemo(() => {
     const normalizedSearch = searchTerm.trim().toUpperCase()
 
-    return previewStudents.filter((student) => {
+    return students.filter((student) => {
+      const studentName = String(student.name ?? '').toUpperCase()
+      const studentCourse = String(student.course ?? '').toUpperCase()
+      const studentCampus = String(student.campus ?? '').toUpperCase()
+
       const matchesSearch =
         !normalizedSearch ||
-        student.name.includes(normalizedSearch) ||
-        student.course.includes(normalizedSearch) ||
-        student.campus.includes(normalizedSearch)
+        studentName.includes(normalizedSearch) ||
+        studentCourse.includes(normalizedSearch) ||
+        studentCampus.includes(normalizedSearch)
 
       const matchesCampus = selectedCampus === 'TODAS' || student.campus === selectedCampus
       const matchesCourse = selectedCourse === 'TODOS' || student.course === selectedCourse
 
       return matchesSearch && matchesCampus && matchesCourse
     })
-  }, [previewStudents, searchTerm, selectedCampus, selectedCourse])
+  }, [students, searchTerm, selectedCampus, selectedCourse])
 
   return (
     <SidebarLayout>
@@ -299,9 +262,7 @@ export default function Students() {
                 className="students-row"
                 key={student.id}
                 onClick={() => {
-                  if (!student.previewOnly) {
-                    navigate(`/alunos/${student.sourceId ?? student.id}`)
-                  }
+                  navigate(`/alunos/${student.id}`)
                 }}
               >
                 <span className="students-name">{student.name}</span>
@@ -312,7 +273,9 @@ export default function Students() {
               : null}
 
             {!loadingStudents && !loadError && filteredStudents.length === 0 ? (
-              <div className="students-empty-state">Nenhum aluno encontrado com os filtros atuais.</div>
+              <div className="students-empty-state">
+                {students.length === 0 ? 'Nenhum aluno cadastrado.' : 'Nenhum aluno encontrado com os filtros atuais.'}
+              </div>
             ) : null}
           </div>
         </section>

@@ -43,7 +43,7 @@ function resolvePartnerUsername(row) {
 
 export default function PartnerPortalProfile() {
   const navigate = useNavigate()
-  const { user, signOut, resetPasswordForEmail } = useAuth()
+  const { user, signOut, updatePassword } = useAuth()
   const [showSignOutModal, setShowSignOutModal] = useState(false)
   const [isSigningOut, setIsSigningOut] = useState(false)
   const [loadingProfile, setLoadingProfile] = useState(true)
@@ -55,9 +55,11 @@ export default function PartnerPortalProfile() {
   const [profileSaveError, setProfileSaveError] = useState('')
   const [profileSaveSuccess, setProfileSaveSuccess] = useState('')
   const [isSavingProfile, setIsSavingProfile] = useState(false)
-  const [resetPasswordError, setResetPasswordError] = useState('')
-  const [resetPasswordSuccess, setResetPasswordSuccess] = useState('')
-  const [isSendingResetPassword, setIsSendingResetPassword] = useState(false)
+  const [passwordValue, setPasswordValue] = useState('')
+  const [confirmPasswordValue, setConfirmPasswordValue] = useState('')
+  const [passwordError, setPasswordError] = useState('')
+  const [passwordSuccess, setPasswordSuccess] = useState('')
+  const [isChangingPassword, setIsChangingPassword] = useState(false)
 
   const applyProfileData = (data) => {
     setNameValue(resolvePartnerUsername(data))
@@ -135,24 +137,40 @@ export default function PartnerPortalProfile() {
     }
   }
 
-  const handleResetPassword = async () => {
-    if (isSendingResetPassword) {
+  const handleChangePassword = async () => {
+    if (isChangingPassword) {
       return
     }
 
-    setIsSendingResetPassword(true)
-    setResetPasswordError('')
-    setResetPasswordSuccess('')
+    setPasswordError('')
+    setPasswordSuccess('')
+
+    const normalizedPassword = passwordValue.trim()
+    const normalizedConfirmation = confirmPasswordValue.trim()
+
+    if (normalizedPassword.length < 6) {
+      setPasswordError('A nova senha deve ter no minimo 6 caracteres.')
+      return
+    }
+
+    if (normalizedPassword !== normalizedConfirmation) {
+      setPasswordError('As senhas informadas nao conferem.')
+      return
+    }
+
+    setIsChangingPassword(true)
 
     try {
-      const { error } = await resetPasswordForEmail(emailValue)
+      const { error } = await updatePassword(normalizedPassword)
       if (error) throw error
 
-      setResetPasswordSuccess(`E-mail de redefinição enviado para ${emailValue}.`)
+      setPasswordValue('')
+      setConfirmPasswordValue('')
+      setPasswordSuccess('Senha alterada com sucesso.')
     } catch (error) {
-      setResetPasswordError(getParceiroDataErrorMessage(error))
+      setPasswordError(getParceiroDataErrorMessage(error))
     } finally {
-      setIsSendingResetPassword(false)
+      setIsChangingPassword(false)
     }
   }
 
@@ -251,16 +269,30 @@ export default function PartnerPortalProfile() {
 
               <div className="profile-field portal-profile-security-field">
                 <span>Senha</span>
+                <input
+                  type="password"
+                  autoComplete="new-password"
+                  value={passwordValue}
+                  onChange={(event) => setPasswordValue(event.target.value)}
+                  placeholder="Nova senha"
+                />
+                <input
+                  type="password"
+                  autoComplete="new-password"
+                  value={confirmPasswordValue}
+                  onChange={(event) => setConfirmPasswordValue(event.target.value)}
+                  placeholder="Confirmar nova senha"
+                />
                 <button
                   type="button"
                   className="portal-profile-secondary-button"
-                  onClick={handleResetPassword}
-                  disabled={isSendingResetPassword}
+                  onClick={handleChangePassword}
+                  disabled={isChangingPassword}
                 >
-                  {isSendingResetPassword ? 'Enviando...' : 'Alterar senha'}
+                  {isChangingPassword ? 'Salvando...' : 'Alterar senha'}
                 </button>
-                {resetPasswordSuccess ? <p className="form-message">{resetPasswordSuccess}</p> : null}
-                {resetPasswordError ? <p className="form-message form-message-error">{resetPasswordError}</p> : null}
+                {passwordSuccess ? <p className="form-message">{passwordSuccess}</p> : null}
+                {passwordError ? <p className="form-message form-message-error">{passwordError}</p> : null}
               </div>
             </div>
           ) : null}
