@@ -1,6 +1,7 @@
 ﻿import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../../context/AuthContext'
+import { useModalDismiss } from '../../../hooks/useModalDismiss'
 import { runWithRetries, withRequestTimeout } from '../../../lib/requestGuards'
 import { supabase } from '../../../lib/supabase'
 import PartnerPortalLayout from '../components/PartnerPortalLayout'
@@ -185,6 +186,8 @@ export default function PartnerPortalRequests() {
     setActionError('')
   }
 
+  useModalDismiss(Boolean(selectedRequest), closeRejectModal, actionLoading)
+
   const handleReject = async () => {
     if (!selectedRequest) return
 
@@ -273,7 +276,10 @@ export default function PartnerPortalRequests() {
                   </div>
 
                   <div className="partner-home-request-actions">
-                    <p className="partner-home-amount">&lt; {formatEuras(request.amountEuras)}</p>
+                    <p className="partner-home-amount">
+                      <span className="euras-inline-coin" aria-hidden="true" />
+                      {formatEuras(request.amountEuras)}
+                    </p>
                     <button
                       type="button"
                       className="partner-home-analyze-button"
@@ -302,12 +308,19 @@ export default function PartnerPortalRequests() {
       </section>
 
       {selectedRequest ? (
-        <div className="partner-home-modal-backdrop" role="presentation">
+        <div
+          className="partner-home-modal-backdrop"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) closeRejectModal()
+          }}
+        >
           <div
             className="partner-home-modal"
             role="dialog"
             aria-modal="true"
             aria-label="Motivo da recusa"
+            onMouseDown={(event) => event.stopPropagation()}
           >
             <button
               type="button"

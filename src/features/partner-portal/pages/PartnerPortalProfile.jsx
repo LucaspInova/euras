@@ -1,5 +1,4 @@
 ﻿import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../../context/AuthContext'
 import { supabase } from '../../../lib/supabase'
 import PartnerPortalLayout from '../components/PartnerPortalLayout'
@@ -8,20 +7,6 @@ import {
   fetchPerfilParceiroAtual,
   getParceiroDataErrorMessage,
 } from '../hooks/useParceiroData'
-
-function CloseIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path
-        d="M6 6l12 12M18 6 6 18"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-      />
-    </svg>
-  )
-}
 
 function resolvePartnerUsername(row) {
   if (!row) return ''
@@ -42,10 +27,7 @@ function resolvePartnerUsername(row) {
 }
 
 export default function PartnerPortalProfile() {
-  const navigate = useNavigate()
-  const { user, signOut, updatePassword } = useAuth()
-  const [showSignOutModal, setShowSignOutModal] = useState(false)
-  const [isSigningOut, setIsSigningOut] = useState(false)
+  const { user, updatePassword } = useAuth()
   const [loadingProfile, setLoadingProfile] = useState(true)
   const [loadError, setLoadError] = useState('')
   const [nameValue, setNameValue] = useState('')
@@ -99,43 +81,6 @@ export default function PartnerPortalProfile() {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user])
-
-  const openSignOutModal = () => {
-    setShowSignOutModal(true)
-  }
-
-  const closeSignOutModal = () => {
-    if (isSigningOut) {
-      return
-    }
-
-    setShowSignOutModal(false)
-  }
-
-  const handleSignOut = async () => {
-    if (isSigningOut) {
-      return
-    }
-
-    setIsSigningOut(true)
-    setShowSignOutModal(false)
-    navigate('/login', { replace: true })
-
-    try {
-      const { error } = await signOut()
-
-      if (error) {
-        console.error('Falha ao encerrar sessão no portal parceiro.', {
-          message: error.message,
-          status: error.status,
-          code: error.code,
-          name: error.name,
-        })
-      }
-    } catch (error) {
-      console.error('Erro inesperado ao encerrar sessão no portal parceiro.', error)
-    }
-  }
 
   const handleChangePassword = async () => {
     if (isChangingPassword) {
@@ -216,7 +161,7 @@ export default function PartnerPortalProfile() {
   }
 
   return (
-    <PartnerPortalLayout title="Meu perfil" showSidebarSignOut={false}>
+    <PartnerPortalLayout title="Meu perfil">
       <section className="profile-page portal-profile-page">
         <article className="profile-card portal-profile-card">
           <header className="portal-profile-header">
@@ -302,49 +247,15 @@ export default function PartnerPortalProfile() {
               type="button"
               className="portal-profile-primary-button"
               onClick={handleSaveProfile}
-              disabled={isSavingProfile || isSigningOut || loadingProfile}
+              disabled={isSavingProfile || loadingProfile}
             >
               {isSavingProfile ? 'Salvando...' : 'Salvar alterações'}
-            </button>
-            <button
-              type="button"
-              className="profile-disconnect-button portal-profile-disconnect-button"
-              onClick={openSignOutModal}
-              disabled={isSigningOut}
-            >
-              Desconectar
             </button>
           </div>
 
           {profileSaveSuccess ? <p className="form-message">{profileSaveSuccess}</p> : null}
           {profileSaveError ? <p className="form-message form-message-error">{profileSaveError}</p> : null}
         </article>
-
-        {showSignOutModal ? (
-          <div className="profile-signout-backdrop portal-profile-signout-backdrop" role="presentation">
-            <div className="profile-signout-modal portal-profile-signout-modal" role="dialog" aria-modal="true" aria-label="Confirmar saída">
-              <button
-                type="button"
-                className="profile-signout-close"
-                aria-label="Fechar confirmação de saída"
-                onClick={closeSignOutModal}
-              >
-                <CloseIcon />
-              </button>
-
-              <p>Tem certeza de que deseja desconectar?</p>
-
-              <button
-                type="button"
-                className="profile-signout-confirm"
-                disabled={isSigningOut}
-                onClick={handleSignOut}
-              >
-                {isSigningOut ? 'Saindo...' : 'Sair'}
-              </button>
-            </div>
-          </div>
-        ) : null}
       </section>
     </PartnerPortalLayout>
   )

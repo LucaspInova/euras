@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../../context/AuthContext'
+import { useModalDismiss } from '../../../hooks/useModalDismiss'
 import { runWithRetries, withRequestTimeout } from '../../../lib/requestGuards'
 import { supabase } from '../../../lib/supabase'
 import PartnerPortalLayout from '../components/PartnerPortalLayout'
@@ -200,6 +201,8 @@ export default function PartnerPortalHome() {
     setActionError('')
   }
 
+  useModalDismiss(Boolean(selectedRequest), () => closeModal(), actionLoading)
+
   const openAnalyzeModal = (request) => {
     setSelectedRequest(request)
     setModalStage('analysis')
@@ -315,7 +318,10 @@ export default function PartnerPortalHome() {
                     </p>
                   </div>
                   <div className="partner-home-request-actions">
-                    <p className="partner-home-amount">&lt; {formatEuras(request.amountEuras)}</p>
+                    <p className="partner-home-amount">
+                      <span className="euras-inline-coin" aria-hidden="true" />
+                      {formatEuras(request.amountEuras)}
+                    </p>
                     <button
                       type="button"
                       className="partner-home-analyze-button"
@@ -363,18 +369,16 @@ export default function PartnerPortalHome() {
                   </div>
                   <div className="partner-home-activity-values">
                     <p
-                      style={{
-                        color:
-                          activity.status === 'recusado'
-                            ? '#e53935'
-                            : activity.status === 'aprovado'
-                              ? '#2e7d32'
-                              : '#5f6368',
-                        fontWeight: 'bold',
-                        fontSize: '1.1rem',
-                      }}
+                      className={
+                        activity.status === 'recusado'
+                          ? 'partner-home-activity-amount partner-home-activity-amount-rejected'
+                          : activity.status === 'aprovado'
+                            ? 'partner-home-activity-amount partner-home-activity-amount-approved'
+                            : 'partner-home-activity-amount partner-home-activity-amount-pending'
+                      }
                     >
-                      &lt; {formatEuras(activity.amountEuras)}
+                      <span className="euras-inline-coin" aria-hidden="true" />
+                      {formatEuras(activity.amountEuras)}
                     </p>
                     <span>{activity.occurredAtLabel}</span>
                   </div>
@@ -393,13 +397,20 @@ export default function PartnerPortalHome() {
       </section>
 
       {selectedRequest ? (
-        <div className="partner-home-modal-backdrop" role="presentation">
+        <div
+          className="partner-home-modal-backdrop"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) closeModal()
+          }}
+        >
           {modalStage === 'analysis' ? (
             <div
               className="partner-home-modal"
               role="dialog"
               aria-modal="true"
               aria-label="Analisar resgate"
+              onMouseDown={(event) => event.stopPropagation()}
             >
               <button
                 type="button"
@@ -413,7 +424,10 @@ export default function PartnerPortalHome() {
               <p>{selectedRequest.studentName} deseja resgatar:</p>
               <h3>{selectedRequest.productTitle}</h3>
               <span>por</span>
-              <strong>&lt; {formatEuras(selectedRequest.amountEuras)}</strong>
+              <strong className="euras-inline-value">
+                <span className="euras-inline-coin" aria-hidden="true" />
+                {formatEuras(selectedRequest.amountEuras)}
+              </strong>
 
               <button
                 type="button"
@@ -444,6 +458,7 @@ export default function PartnerPortalHome() {
               role="dialog"
               aria-modal="true"
               aria-label="Motivo da recusa"
+              onMouseDown={(event) => event.stopPropagation()}
             >
               <button
                 type="button"
@@ -485,6 +500,7 @@ export default function PartnerPortalHome() {
               role="dialog"
               aria-modal="true"
               aria-label="Resgate concluído"
+              onMouseDown={(event) => event.stopPropagation()}
             >
               <div className="partner-home-success-icon">
                 <SuccessIcon />
@@ -506,6 +522,7 @@ export default function PartnerPortalHome() {
               role="dialog"
               aria-modal="true"
               aria-label="Resgate recusado"
+              onMouseDown={(event) => event.stopPropagation()}
             >
               <div className="partner-home-success-icon">
                 <RejectedIcon />

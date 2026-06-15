@@ -1,5 +1,6 @@
 ﻿import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
+import ProductEditModal from '../components/ProductEditModal'
 import SidebarLayout from '../components/SidebarLayout'
 import { getPartnerApiErrorMessage, listProducts } from '../lib/partnersApi'
 import { runWithRetries, withRequestTimeout } from '../lib/requestGuards'
@@ -70,6 +71,7 @@ export default function Products() {
   const [loadingProducts, setLoadingProducts] = useState(true)
   const [loadError, setLoadError] = useState('')
   const [reloadNonce, setReloadNonce] = useState(0)
+  const [editingProductId, setEditingProductId] = useState(null)
 
   useEffect(() => {
     let active = true
@@ -155,6 +157,7 @@ export default function Products() {
   }, [previewProducts, searchTerm, selectedInstitution])
 
   const hasActiveFilters = searchTerm.trim() || selectedInstitution !== 'TODAS'
+  const refreshProducts = () => setReloadNonce((current) => current + 1)
 
   return (
     <SidebarLayout>
@@ -235,7 +238,7 @@ export default function Products() {
                     className="products-card-logo products-card-link"
                     onClick={() => {
                       if (!product.previewOnly) {
-                        navigate(`/produtos/${product.sourceId ?? product.id}`)
+                        setEditingProductId(product.sourceId ?? product.id)
                       }
                     }}
                   >
@@ -266,8 +269,14 @@ export default function Products() {
             </p>
           ) : null}
         </section>
+
+        <ProductEditModal
+          productId={editingProductId}
+          onClose={() => setEditingProductId(null)}
+          onSaved={refreshProducts}
+          onRemoved={refreshProducts}
+        />
       </section>
     </SidebarLayout>
   )
 }
-

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import SidebarLayout from '../components/SidebarLayout'
+import { useModalDismiss } from '../hooks/useModalDismiss'
 import { runWithRetries, withRequestTimeout } from '../lib/requestGuards'
 import { getStudentApiErrorMessage, listStudents } from '../lib/studentsApi'
 
@@ -55,6 +56,14 @@ function AddIcon() {
       <circle cx="10.2" cy="8.1" r="3.1" fill="none" stroke="currentColor" strokeWidth="1.9" />
       <path d="M18.1 7.1v5.8" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" />
       <path d="M15.2 10h5.8" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+function CloseIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M6 6l12 12M18 6 6 18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
     </svg>
   )
 }
@@ -135,6 +144,10 @@ export default function Students() {
       navigate(location.pathname, { replace: true, state: {} })
     }
   }, [location.pathname, location.state, navigate])
+
+  const closeTransferSuccess = () => setTransferSuccess(null)
+
+  useModalDismiss(Boolean(transferSuccess), closeTransferSuccess)
 
   const campusOptions = useMemo(
     () => ['TODAS', ...new Set(students.map((student) => student.campus).filter(Boolean))],
@@ -281,15 +294,35 @@ export default function Students() {
         </section>
 
         {transferSuccess ? (
-          <div className="student-modal-backdrop" role="presentation">
-            <div className="student-remove-modal student-success-modal" role="dialog" aria-modal="true">
+          <div
+            className="student-modal-backdrop"
+            role="presentation"
+            onMouseDown={(event) => {
+              if (event.target === event.currentTarget) closeTransferSuccess()
+            }}
+          >
+            <div
+              className="student-remove-modal student-success-modal"
+              role="dialog"
+              aria-modal="true"
+              onMouseDown={(event) => event.stopPropagation()}
+            >
+              <button
+                type="button"
+                className="student-modal-close"
+                aria-label="Fechar aviso de transferência"
+                onClick={closeTransferSuccess}
+              >
+                <CloseIcon />
+              </button>
+
               <div className="student-success-icon">
                 <SuccessIcon />
               </div>
 
               <p>Transferência concluída!</p>
 
-              <button type="button" className="student-success-button" onClick={() => setTransferSuccess(null)}>
+              <button type="button" className="student-success-button" onClick={closeTransferSuccess}>
                 Continuar
               </button>
             </div>

@@ -11,6 +11,8 @@ const PROFILE_COLUMNS_WITH_AUTH = `${PROFILE_COLUMNS}, auth_user_id`
 const AUTH_BOOTSTRAP_TIMEOUT_MS = 12000
 const PROFILE_LOAD_TIMEOUT_MS = 10000
 const SIGN_IN_TIMEOUT_MS = 12000
+const STUDENT_LOGIN_PREPARE_TIMEOUT_MS = 15000
+const PREPARE_STUDENT_LOGIN_FUNCTION = 'preparar-login-aluno-app'
 
 async function runGuardedAuthTask(
   task,
@@ -60,6 +62,59 @@ function isMissingColumnError(error, columnName) {
 
 function normalizeEmail(value) {
   return String(value ?? '').trim().toLowerCase()
+}
+
+function isInvalidLoginCredentialsError(error) {
+  return String(error?.message ?? '').toLowerCase().includes('invalid login credentials')
+}
+
+function getPrepareStudentLoginMessage(code) {
+  if (code === 'function_not_found') {
+    return 'Funcao de login de aluno nao publicada no Supabase.'
+  }
+
+  if (code === 'function_error' || code === 'service_error') {
+    return 'Erro na funcao de login de aluno. Verifique as secrets no Supabase.'
+  }
+
+  if (code === 'duplicate_profile_email' || code === 'duplicate_auth_email' || code === 'duplicate_auth_link') {
+    return 'Este e-mail possui vinculo duplicado. Fale com o administrador.'
+  }
+
+  if (code === 'invalid_auth_link') {
+    return 'Cadastro do aluno precisa ser revisado pelo administrador.'
+  }
+
+  if (code === 'student_not_allowed') {
+    return 'Aluno nao liberado para acesso ou e-mail invalido.'
+  }
+
+  return 'Nao foi possivel liberar o acesso do aluno agora. Tente novamente.'
+}
+
+function createPrepareStudentLoginError(code, message) {
+  const error = new Error(message || getPrepareStudentLoginMessage(code))
+  error.code = code || 'student_login_prepare_failed'
+  return error
+}
+
+async function getPrepareStudentLoginErrorCode(error) {
+  if (!error) return ''
+
+  try {
+    const context = error.context
+    if (context?.clone && typeof context.clone === 'function') {
+      const body = await context.clone().json()
+      if (body?.code === 'NOT_FOUND') return 'function_not_found'
+      if (body?.code) return 'function_error'
+    }
+  } catch {
+    // Ignore parsing errors and fall back to the message.
+  }
+
+  const message = String(error?.message ?? '').toLowerCase()
+  if (message.includes('not found')) return 'function_not_found'
+  return 'function_error'
 }
 
 async function loadProfileById(profileId, columns = PROFILE_COLUMNS) {
@@ -118,14 +173,14 @@ async function loadAuthenticatedProfile(authUser) {
 
   if (!authUserId) return null
 
-  const { data, error } = await euras
+  const profileByAuthId = await euras
     .from('perfis')
     .select(PROFILE_COLUMNS_WITH_AUTH)
-    .or(`id.eq.${authUserId},auth_user_id.eq.${authUserId}`)
+    .eq('auth_user_id', authUserId)
     .limit(1)
     .maybeSingle()
 
-  if (error && isMissingColumnError(error, 'auth_user_id')) {
+  if (profileByAuthId.error && isMissingColumnError(profileByAuthId.error, 'auth_user_id')) {
     const legacyProfileById = await loadProfileById(authUserId)
     if (legacyProfileById) {
       return legacyProfileById
@@ -134,15 +189,48 @@ async function loadAuthenticatedProfile(authUser) {
     return loadProfileByEmail(authUserEmail)
   }
 
-  if (error) {
-    throw error
+  if (profileByAuthId.error) {
+    throw profileByAuthId.error
   }
 
-  if (data) {
-    return data
+  if (profileByAuthId.data) {
+    return profileByAuthId.data
+  }
+
+  const profileByLegacyId = await loadProfileById(authUserId, PROFILE_COLUMNS_WITH_AUTH)
+  if (profileByLegacyId) {
+    return profileByLegacyId
   }
 
   return loadProfileByEmail(authUserEmail)
+}
+
+async function prepareStudentLoginIfNeeded(email) {
+  const normalizedEmail = normalizeEmail(email)
+  if (!normalizedEmail) return { ok: false, code: 'invalid_email' }
+
+  const { data, error } = await runGuardedAuthTask(
+    () =>
+      supabase.functions.invoke(PREPARE_STUDENT_LOGIN_FUNCTION, {
+        body: { email: normalizedEmail },
+      }),
+    {
+      attempts: 1,
+      timeoutMs: STUDENT_LOGIN_PREPARE_TIMEOUT_MS,
+      timeoutMessage: 'Tempo limite ao preparar login de aluno. Tente novamente.',
+    },
+  )
+
+  if (error || !data?.ok) {
+    const code = data?.code || (await getPrepareStudentLoginErrorCode(error))
+    return {
+      ok: false,
+      code,
+      error: createPrepareStudentLoginError(code, data?.message),
+    }
+  }
+
+  return { ok: true }
 }
 
 async function updateLastLoginIfAllowed(profileId) {
@@ -379,19 +467,40 @@ export function AuthProvider({ children }) {
     setAuthError('')
 
     try {
-      const { data, error } = await runGuardedAuthTask(
-        () =>
-          supabase.auth.signInWithPassword({
-            email,
-            password,
-          }),
-        {
-          timeoutMs: SIGN_IN_TIMEOUT_MS,
-          timeoutMessage: 'Tempo limite ao tentar fazer login. Verifique sua conexão e tente novamente.',
-        },
-      )
+      const normalizedEmail = normalizeEmail(email)
+      const signInPayload = {
+        email: normalizedEmail || email,
+        password,
+      }
 
-      return { data, error }
+      const attemptPasswordSignIn = () =>
+        runGuardedAuthTask(
+          () => supabase.auth.signInWithPassword(signInPayload),
+          {
+            timeoutMs: SIGN_IN_TIMEOUT_MS,
+            timeoutMessage: 'Tempo limite ao tentar fazer login. Verifique sua conexão e tente novamente.',
+          },
+        )
+
+      const firstAttempt = await attemptPasswordSignIn()
+
+      if (!firstAttempt.error || !isInvalidLoginCredentialsError(firstAttempt.error)) {
+        return firstAttempt
+      }
+
+      const prepareStudentLogin = await prepareStudentLoginIfNeeded(normalizedEmail)
+
+      if (!prepareStudentLogin.ok) {
+        if (prepareStudentLogin.code === 'student_not_allowed' || prepareStudentLogin.code === 'invalid_email') {
+          return firstAttempt
+        }
+
+        return { data: null, error: prepareStudentLogin.error }
+      }
+
+      const retryAttempt = await attemptPasswordSignIn()
+
+      return retryAttempt
     } catch (error) {
       return { data: null, error }
     }

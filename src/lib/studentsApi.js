@@ -421,17 +421,6 @@ async function upsertLegacyStudentIfPresent(studentId, profileData) {
   }
 }
 
-async function setLegacyStudentActiveIfPresent(studentId, active) {
-  const { error } = await euras
-    .from('alunos')
-    .update({ ativo: active })
-    .eq('id', studentId)
-
-  if (error && !isMissingRelationError(error)) {
-    throw error
-  }
-}
-
 async function resolveCreatorProfileId(createdByAuthUserId) {
   if (!createdByAuthUserId) {
     return null

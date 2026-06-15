@@ -45,7 +45,7 @@ function PortalMenuIcon({ type }) {
   )
 }
 
-export default function PartnerPortalLayout({ title, children, showSidebarSignOut = false }) {
+export default function PartnerPortalLayout({ title, children, showSidebarSignOut = true }) {
   const navigate = useNavigate()
   const { user, profile, signOut } = useAuth()
   const [signingOut, setSigningOut] = useState(false)
@@ -80,16 +80,20 @@ export default function PartnerPortalLayout({ title, children, showSidebarSignOu
   const handleSignOut = async () => {
     setSigningOut(true)
     setSignOutError('')
-    navigate('/login', { replace: true })
 
     try {
       const { error } = await signOut()
 
       if (error) {
         console.error('Falha ao encerrar sessão no portal parceiro.', error)
+        setSignOutError('Não foi possível encerrar a sessão agora. Tente novamente.')
+        return
       }
+
+      navigate('/login', { replace: true })
     } catch (error) {
       console.error('Erro ao encerrar sessão.', error)
+      setSignOutError('Não foi possível encerrar a sessão agora. Tente novamente.')
     } finally {
       setSigningOut(false)
     }

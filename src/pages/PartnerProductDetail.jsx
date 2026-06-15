@@ -1,12 +1,13 @@
-import { useEffect, useState } from 'react'
-import { Navigate, useNavigate, useParams } from 'react-router-dom'
-import SidebarLayout from '../components/SidebarLayout'
+import { useEffect, useState } from "react";
+import { Navigate, useNavigate, useParams } from "react-router-dom";
+import SidebarLayout from "../components/SidebarLayout";
+import { useModalDismiss } from "../hooks/useModalDismiss";
 import {
   getPartnerApiErrorMessage,
   getPartnerProductById,
   removePartnerProduct,
   updatePartnerProduct,
-} from '../lib/partnersApi'
+} from "../lib/partnersApi";
 
 function BackIcon() {
   return (
@@ -20,87 +21,121 @@ function BackIcon() {
         strokeLinejoin="round"
       />
     </svg>
-  )
+  );
 }
 
 function RemoveIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
-      <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" strokeWidth="2" />
-      <path d="M8 8l8 8M16 8l-8 8" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+      <circle
+        cx="12"
+        cy="12"
+        r="10"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+      />
+      <path
+        d="M8 8l8 8M16 8l-8 8"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
     </svg>
-  )
+  );
+}
+
+function CloseIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path
+        d="M6 6l12 12M18 6 6 18"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
 }
 
 export default function PartnerProductDetail() {
-  const navigate = useNavigate()
-  const { partnerId, productId } = useParams()
-  const [loading, setLoading] = useState(true)
-  const [formError, setFormError] = useState('')
-  const [isSaving, setIsSaving] = useState(false)
-  const [showDeleteModal, setShowDeleteModal] = useState(false)
-  const [form, setForm] = useState(null)
+  const navigate = useNavigate();
+  const { partnerId, productId } = useParams();
+  const [loading, setLoading] = useState(true);
+  const [formError, setFormError] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [form, setForm] = useState(null);
 
   useEffect(() => {
-    let active = true
+    let active = true;
 
     async function load() {
-      setLoading(true)
-      setFormError('')
+      setLoading(true);
+      setFormError("");
 
       try {
-        const data = await getPartnerProductById(partnerId, productId)
-        if (!active) return
+        const data = await getPartnerProductById(partnerId, productId);
+        if (!active) return;
 
         setForm({
-          title: data.title ?? '',
-          description: data.description ?? '',
-          priceEuras: String(data.priceEuras ?? ''),
-          imageUrl: data.imageUrl ?? '',
-          partnerName: data.partnerName ?? '',
-        })
+          title: data.title ?? "",
+          description: data.description ?? "",
+          priceEuras: String(data.priceEuras ?? ""),
+          imageUrl: data.imageUrl ?? "",
+          partnerName: data.partnerName ?? "",
+        });
       } catch (error) {
-        if (!active) return
-        setFormError(getPartnerApiErrorMessage(error))
+        if (!active) return;
+        setFormError(getPartnerApiErrorMessage(error));
       } finally {
         if (active) {
-          setLoading(false)
+          setLoading(false);
         }
       }
     }
 
-    load()
+    load();
 
     return () => {
-      active = false
-    }
-  }, [partnerId, productId])
+      active = false;
+    };
+  }, [partnerId, productId]);
+
+  const closeDeleteModal = () => {
+    if (isSaving) return;
+    setShowDeleteModal(false);
+  };
+
+  useModalDismiss(showDeleteModal, closeDeleteModal, isSaving);
 
   if (!loading && !formError && !form) {
-    return <Navigate to={`/parceiros/${partnerId}/produtos`} replace />
+    return <Navigate to={`/parceiros/${partnerId}`} replace />;
   }
 
   const handleFieldChange = (field) => (event) => {
-    setForm((current) => ({ ...current, [field]: event.target.value }))
-  }
+    setForm((current) => ({ ...current, [field]: event.target.value }));
+  };
 
   const handleSave = async (event) => {
-    event.preventDefault()
-    if (!form) return
+    event.preventDefault();
+    if (!form) return;
 
-    setFormError('')
+    setFormError("");
 
     if (!form.title.trim()) {
-      setFormError('Informe o titulo do produto.')
-      return
+      setFormError("Informe o titulo do produto.");
+      return;
     }
 
     if (!form.priceEuras.trim()) {
-      setFormError('Informe o valor em Euras.')
-      return
+      setFormError("Informe o valor em Euras.");
+      return;
     }
 
-    setIsSaving(true)
+    setIsSaving(true);
 
     try {
       await updatePartnerProduct(partnerId, productId, {
@@ -108,27 +143,27 @@ export default function PartnerProductDetail() {
         description: form.description.trim(),
         priceEuras: form.priceEuras.trim(),
         imageUrl: form.imageUrl.trim(),
-      })
+      });
 
-      navigate(`/parceiros/${partnerId}/produtos`, { replace: true })
+      navigate(`/parceiros/${partnerId}`, { replace: true });
     } catch (error) {
-      setFormError(getPartnerApiErrorMessage(error))
-      setIsSaving(false)
+      setFormError(getPartnerApiErrorMessage(error));
+      setIsSaving(false);
     }
-  }
+  };
 
   const handleRemove = async () => {
-    setIsSaving(true)
-    setFormError('')
+    setIsSaving(true);
+    setFormError("");
 
     try {
-      await removePartnerProduct(partnerId, productId)
-      navigate(`/parceiros/${partnerId}/produtos`, { replace: true })
+      await removePartnerProduct(partnerId, productId);
+      navigate(`/parceiros/${partnerId}`, { replace: true });
     } catch (error) {
-      setFormError(getPartnerApiErrorMessage(error))
-      setIsSaving(false)
+      setFormError(getPartnerApiErrorMessage(error));
+      setIsSaving(false);
     }
-  }
+  };
 
   return (
     <SidebarLayout>
@@ -139,15 +174,17 @@ export default function PartnerProductDetail() {
           <button
             type="button"
             className="student-back-button"
-            aria-label="Voltar para produtos"
-            onClick={() => navigate(`/parceiros/${partnerId}/produtos`)}
+            aria-label="Voltar para parceiro"
+            onClick={() => navigate(`/parceiros/${partnerId}`)}
           >
             <BackIcon />
           </button>
         </div>
 
         {loading ? <p className="form-message">Carregando produto...</p> : null}
-        {formError ? <p className="form-message form-message-error">{formError}</p> : null}
+        {formError ? (
+          <p className="form-message form-message-error">{formError}</p>
+        ) : null}
 
         {!loading && form ? (
           <form className="student-create-form" onSubmit={handleSave}>
@@ -161,12 +198,20 @@ export default function PartnerProductDetail() {
 
                   <label className="partner-field">
                     <span>Título:</span>
-                    <input type="text" value={form.title} onChange={handleFieldChange('title')} />
+                    <input
+                      type="text"
+                      value={form.title}
+                      onChange={handleFieldChange("title")}
+                    />
                   </label>
 
                   <label className="partner-field">
                     <span>Descrição:</span>
-                    <input type="text" value={form.description} onChange={handleFieldChange('description')} />
+                    <input
+                      type="text"
+                      value={form.description}
+                      onChange={handleFieldChange("description")}
+                    />
                   </label>
                 </div>
 
@@ -178,24 +223,37 @@ export default function PartnerProductDetail() {
                       min="0"
                       step="1"
                       value={form.priceEuras}
-                      onChange={handleFieldChange('priceEuras')}
+                      onChange={handleFieldChange("priceEuras")}
                     />
                   </label>
 
                   <label className="partner-field">
                     <span>URL da imagem:</span>
-                    <input type="text" value={form.imageUrl} onChange={handleFieldChange('imageUrl')} />
+                    <input
+                      type="text"
+                      value={form.imageUrl}
+                      onChange={handleFieldChange("imageUrl")}
+                    />
                   </label>
                 </div>
               </div>
             </section>
 
             <div className="partner-create-submit-row partner-detail-actions-row">
-              <button type="submit" className="student-submit-button" disabled={isSaving}>
-                {isSaving ? 'Salvando...' : 'Salvar produto'}
+              <button
+                type="submit"
+                className="student-submit-button"
+                disabled={isSaving}
+              >
+                {isSaving ? "Salvando..." : "Salvar produto"}
               </button>
 
-              <button type="button" className="student-remove-button" disabled={isSaving} onClick={() => setShowDeleteModal(true)}>
+              <button
+                type="button"
+                className="student-remove-button"
+                disabled={isSaving}
+                onClick={() => setShowDeleteModal(true)}
+              >
                 <span>Remover produto</span>
                 <span className="student-remove-icon">
                   <RemoveIcon />
@@ -206,10 +264,35 @@ export default function PartnerProductDetail() {
         ) : null}
 
         {showDeleteModal ? (
-          <div className="student-modal-backdrop" role="presentation">
-            <div className="student-remove-modal" role="dialog" aria-modal="true" aria-label="Remover produto">
+          <div
+            className="student-modal-backdrop"
+            role="presentation"
+            onMouseDown={(event) => {
+              if (event.target === event.currentTarget) closeDeleteModal();
+            }}
+          >
+            <div
+              className="student-remove-modal"
+              role="dialog"
+              aria-modal="true"
+              aria-label="Remover produto"
+              onMouseDown={(event) => event.stopPropagation()}
+            >
+              <button
+                type="button"
+                className="student-modal-close"
+                aria-label="Fechar aviso de remoção"
+                onClick={closeDeleteModal}
+              >
+                <CloseIcon />
+              </button>
+
               <p>Tem certeza de que deseja remover este produto?</p>
-              <button type="button" className="student-modal-confirm" onClick={handleRemove}>
+              <button
+                type="button"
+                className="student-modal-confirm"
+                onClick={handleRemove}
+              >
                 Remover
               </button>
             </div>
@@ -217,5 +300,5 @@ export default function PartnerProductDetail() {
         ) : null}
       </section>
     </SidebarLayout>
-  )
+  );
 }

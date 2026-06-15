@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Navigate, useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from '../../../context/AuthContext'
+import { useModalDismiss } from '../../../hooks/useModalDismiss'
 import { buildOptimizedImageDataUrl } from '../../../lib/imageUpload'
 import { supabase } from '../../../lib/supabase'
 import PartnerPortalLayout from '../components/PartnerPortalLayout'
@@ -210,10 +211,6 @@ export default function PartnerPortalProductDetail() {
     )
   }, [form, initialForm])
 
-  if (!loading && !loadError && !form) {
-    return <Navigate to="/portal-parceiro/produtos" replace />
-  }
-
   const handleSubmit = async (event) => {
     event.preventDefault()
     if (!form || !hasChanges) return
@@ -291,6 +288,17 @@ export default function PartnerPortalProductDetail() {
     }
   }
 
+  const closeRemoveModal = () => {
+    if (isRemoving) return
+    setShowRemoveModal(false)
+  }
+
+  useModalDismiss(showRemoveModal, closeRemoveModal, isRemoving)
+
+  if (!loading && !loadError && !form) {
+    return <Navigate to="/portal-parceiro/produtos" replace />
+  }
+
   return (
     <PartnerPortalLayout>
       <section className="portal-product-editor-page">
@@ -329,7 +337,7 @@ export default function PartnerPortalProductDetail() {
                   <div className="portal-product-value-block">
                     <span>Valor:</span>
                     <label className="portal-product-value-row">
-                      <strong className="portal-product-value-symbol">&lt;</strong>
+                      <span className="portal-product-value-symbol" aria-hidden="true" />
                       <input type="text" value={form.value} onChange={handleFieldChange('value')} />
                     </label>
                   </div>
@@ -391,13 +399,25 @@ export default function PartnerPortalProductDetail() {
         ) : null}
 
         {showRemoveModal ? (
-          <div className="portal-product-remove-backdrop" role="presentation">
-            <div className="portal-product-remove-modal" role="dialog" aria-modal="true" aria-label="Remover produto">
+          <div
+            className="portal-product-remove-backdrop"
+            role="presentation"
+            onMouseDown={(event) => {
+              if (event.target === event.currentTarget) closeRemoveModal()
+            }}
+          >
+            <div
+              className="portal-product-remove-modal"
+              role="dialog"
+              aria-modal="true"
+              aria-label="Remover produto"
+              onMouseDown={(event) => event.stopPropagation()}
+            >
               <button
                 type="button"
                 className="portal-product-remove-close"
                 aria-label="Fechar modal de remoção"
-                onClick={() => setShowRemoveModal(false)}
+                onClick={closeRemoveModal}
               >
                 <CloseIcon />
               </button>

@@ -222,7 +222,7 @@ export default function ProductCreate() {
                 <div className="product-create-value-block">
                   <span>Valor:</span>
                   <label className="product-create-value-row">
-                    <strong className="product-create-symbol">&lt;</strong>
+                    <span className="product-create-symbol" aria-hidden="true" />
                     <input type="text" value={form.value} onChange={handleFieldChange('value')} />
                   </label>
                 </div>

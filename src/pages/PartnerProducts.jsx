@@ -1,5 +1,6 @@
 ﻿import { useEffect, useMemo, useState } from 'react'
 import { Navigate, useNavigate, useParams } from 'react-router-dom'
+import ProductEditModal from '../components/ProductEditModal'
 import SidebarLayout from '../components/SidebarLayout'
 import { getPartnerApiErrorMessage, listPartnerProducts } from '../lib/partnersApi'
 import { runWithRetries, withRequestTimeout } from '../lib/requestGuards'
@@ -55,6 +56,7 @@ export default function PartnerProducts() {
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
   const [reloadNonce, setReloadNonce] = useState(0)
+  const [editingProductId, setEditingProductId] = useState(null)
 
   useEffect(() => {
     let active = true
@@ -104,6 +106,8 @@ export default function PartnerProducts() {
 
     return previewProducts.filter((product) => normalize(product.name).includes(search))
   }, [previewProducts, searchTerm])
+
+  const refreshProducts = () => setReloadNonce((current) => current + 1)
 
   if (!loading && !loadError && !partner) {
     return <Navigate to="/parceiros" replace />
@@ -155,7 +159,7 @@ export default function PartnerProducts() {
                   <button
                     type="button"
                     className="product-card-logo product-card-link"
-                    onClick={() => navigate(`/parceiros/${partnerId}/produtos/${product.sourceId ?? product.id}`)}
+                    onClick={() => setEditingProductId(product.sourceId ?? product.id)}
                   >
                     {product.imageUrl ? (
                       <img
@@ -186,6 +190,13 @@ export default function PartnerProducts() {
             Voltar
           </button>
         ) : null}
+
+        <ProductEditModal
+          productId={editingProductId}
+          onClose={() => setEditingProductId(null)}
+          onSaved={refreshProducts}
+          onRemoved={refreshProducts}
+        />
       </section>
     </SidebarLayout>
   )

@@ -72,7 +72,7 @@ function getWeekdayLabel(isoDate) {
 }
 
 function formatAmount(value) {
-  return `< ${Number(value ?? 0).toFixed(2).replace('.', ',')}`
+  return Number(value ?? 0).toFixed(2).replace('.', ',')
 }
 
 function formatTime(value) {
@@ -434,7 +434,10 @@ export default function Activities() {
                         </div>
 
                         <div className="activity-meta">
-                          <strong>{formatAmount(activity.amountEuras)}</strong>
+                          <strong className="euras-inline-value">
+                            <span className="euras-inline-coin" aria-hidden="true" />
+                            {formatAmount(activity.amountEuras)}
+                          </strong>
                           <span>{formatTime(activity.time)}</span>
                         </div>
                       </article>

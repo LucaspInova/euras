@@ -497,7 +497,6 @@ async function listPartnersFromProfiles() {
     .from("perfis")
     .select("id, nome_completo, telefone, email, campus, url_avatar, ativo")
     .eq("papel", "parceiro")
-    .eq("ativo", true)
     .order("nome_completo", { ascending: true });
 
   if (error) {
@@ -732,14 +731,19 @@ async function resolvePartnerProfileIdByInstitution(institution) {
   return null;
 }
 
-async function getRawPartnerById(partnerId) {
-  const { data, error } = await euras
+async function getRawPartnerById(partnerId, { includeInactive = false } = {}) {
+  let query = euras
     .from("parceiros")
     .select(
       "id, perfil_parceiro_id, nome_instituicao, usuario_responsavel_nome, telefone, email, campus, url_imagem, tipo, ativo",
     )
-    .eq("id", partnerId)
-    .eq("ativo", true)
+    .eq("id", partnerId);
+
+  if (!includeInactive) {
+    query = query.eq("ativo", true);
+  }
+
+  const { data, error } = await query
     .limit(1)
     .maybeSingle();
 
@@ -754,19 +758,24 @@ async function getRawPartnerById(partnerId) {
   return data;
 }
 
-async function getPartnerIdentityById(partnerId) {
-  const partnerRow = await getRawPartnerById(partnerId);
+async function getPartnerIdentityById(partnerId, { includeInactive = false } = {}) {
+  const partnerRow = await getRawPartnerById(partnerId, { includeInactive });
 
   if (partnerRow) {
     return mapPartner(partnerRow);
   }
 
-  const { data: profile, error: profileError } = await euras
+  let profileQuery = euras
     .from("perfis")
     .select("id, nome_completo, telefone, email, campus, url_avatar, ativo")
     .eq("id", partnerId)
-    .eq("papel", "parceiro")
-    .eq("ativo", true)
+    .eq("papel", "parceiro");
+
+  if (!includeInactive) {
+    profileQuery = profileQuery.eq("ativo", true);
+  }
+
+  const { data: profile, error: profileError } = await profileQuery
     .limit(1)
     .maybeSingle();
 
@@ -921,7 +930,6 @@ export async function listPartners() {
     .select(
       "id, perfil_parceiro_id, nome_instituicao, usuario_responsavel_nome, telefone, email, campus, url_imagem, tipo, ativo",
     )
-    .eq("ativo", true)
     .order("nome_instituicao", { ascending: true });
 
   if (error) {
@@ -940,7 +948,7 @@ export async function listPartners() {
 export async function getPartnerById(partnerId) {
   await ensureFreshSession();
 
-  const partnerRow = await getRawPartnerById(partnerId);
+  const partnerRow = await getRawPartnerById(partnerId, { includeInactive: true });
 
   if (partnerRow) {
     const mappedPartner = mapPartner(partnerRow);
@@ -959,7 +967,6 @@ export async function getPartnerById(partnerId) {
     .select("id, nome_completo, telefone, email, campus, url_avatar, ativo")
     .eq("id", partnerId)
     .eq("papel", "parceiro")
-    .eq("ativo", true)
     .limit(1)
     .maybeSingle();
 
@@ -1057,7 +1064,7 @@ export async function updatePartner(
 ) {
   await ensureFreshSession();
 
-  const partnerRow = await getRawPartnerById(partnerId);
+  const partnerRow = await getRawPartnerById(partnerId, { includeInactive: true });
 
   if (!partnerRow) {
     const profileUpdate = {
@@ -1138,7 +1145,7 @@ export async function updatePartner(
 export async function removePartner(partnerId) {
   await ensureFreshSession();
 
-  const partnerRow = await getRawPartnerById(partnerId);
+  const partnerRow = await getRawPartnerById(partnerId, { includeInactive: true });
 
   if (!partnerRow) {
     const { data: profile, error: profileError } = await euras
@@ -1188,6 +1195,57 @@ export async function removePartner(partnerId) {
   invalidateProductCaches(partnerId);
 }
 
+export async function setPartnerActivation(partnerId, active) {
+  await ensureFreshSession();
+
+  const nextActive = Boolean(active);
+  const partnerRow = await getRawPartnerById(partnerId, { includeInactive: true });
+
+  if (!partnerRow) {
+    const { data: profile, error: profileError } = await euras
+      .from("perfis")
+      .update({ ativo: nextActive })
+      .eq("id", partnerId)
+      .eq("papel", "parceiro")
+      .select("id")
+      .maybeSingle();
+
+    if (profileError) {
+      throw profileError;
+    }
+
+    if (!profile) {
+      throw new Error("Parceiro não encontrado.");
+    }
+
+    invalidateProductCaches(partnerId);
+    return nextActive;
+  }
+
+  const { error: partnerError } = await euras
+    .from("parceiros")
+    .update({ ativo: nextActive })
+    .eq("id", partnerRow.id);
+
+  if (partnerError) {
+    throw partnerError;
+  }
+
+  if (partnerRow.perfil_parceiro_id) {
+    const { error: profileError } = await euras
+      .from("perfis")
+      .update({ ativo: nextActive })
+      .eq("id", partnerRow.perfil_parceiro_id);
+
+    if (profileError) {
+      throw profileError;
+    }
+  }
+
+  invalidateProductCaches(partnerId);
+  return nextActive;
+}
+
 export async function listPartnerProducts(partnerId) {
   const cacheHit = getCachedPartnerProducts(partnerId);
   if (cacheHit) {
@@ -1199,7 +1257,7 @@ export async function listPartnerProducts(partnerId) {
     async () => {
       await ensureFreshSession();
 
-      const partner = await getPartnerIdentityById(partnerId);
+      const partner = await getPartnerIdentityById(partnerId, { includeInactive: true });
 
       if (!partner) {
         const emptyPayload = { partner: null, products: [] };
@@ -1253,7 +1311,7 @@ export async function createPartnerProduct(
 ) {
   await ensureFreshSession();
 
-  const partner = await getPartnerIdentityById(partnerId);
+  const partner = await getPartnerIdentityById(partnerId, { includeInactive: true });
   if (!partner || !partner.profileId) {
     throw new Error("Parceiro nÃ£o encontrado.");
   }
@@ -1287,7 +1345,7 @@ export async function createPartnerProduct(
 export async function getPartnerProductById(partnerId, productId) {
   await ensureFreshSession();
 
-  const partner = await getPartnerIdentityById(partnerId);
+  const partner = await getPartnerIdentityById(partnerId, { includeInactive: true });
   if (!partner || !partner.profileId) {
     return null;
   }
@@ -1316,7 +1374,7 @@ export async function updatePartnerProduct(
 ) {
   await ensureFreshSession();
 
-  const partner = await getPartnerIdentityById(partnerId);
+  const partner = await getPartnerIdentityById(partnerId, { includeInactive: true });
   if (!partner || !partner.profileId) {
     throw new Error("Parceiro nÃ£o encontrado.");
   }
@@ -1355,7 +1413,7 @@ export async function updatePartnerProduct(
 export async function removePartnerProduct(partnerId, productId) {
   await ensureFreshSession();
 
-  const partner = await getPartnerIdentityById(partnerId);
+  const partner = await getPartnerIdentityById(partnerId, { includeInactive: true });
   if (!partner || !partner.profileId) {
     throw new Error("Parceiro nÃ£o encontrado.");
   }

@@ -1,0 +1,1658 @@
+:root {
+  --student-bg: #ffffff;
+  --student-page-bg: #eee8d3;
+  --student-brand: #edb500;
+  --student-brand-dark: #b18410;
+  --student-soft: #f8ecce;
+  --student-text: #534c2f;
+  --student-text-2: #7a7a7a;
+  --student-muted: #6a6a6a;
+  --student-line: #d8d8d8;
+  --student-card-line: #f0e2ba;
+  --student-error: #c62828;
+  --student-success: #2e7d32;
+  --student-shadow: 0 10px 24px rgba(69, 55, 19, 0.12);
+}
+
+.student-portal-page {
+  min-height: 100vh;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.28), rgba(255, 255, 255, 0)),
+    var(--student-page-bg);
+  color: var(--student-text);
+  display: flex;
+  justify-content: center;
+}
+
+.student-app-shell {
+  width: min(100%, 480px);
+  min-height: 100vh;
+  background: var(--student-bg);
+  box-shadow: none;
+  display: flex;
+  flex-direction: column;
+}
+
+.student-app-view {
+  flex: 1;
+  min-height: 0;
+  background: var(--student-bg);
+}
+
+.student-app-header,
+.student-back-header {
+  min-height: 64px;
+  background: var(--student-brand);
+  color: var(--student-text);
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr) 32px;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  border-bottom-left-radius: 9px;
+  border-bottom-right-radius: 9px;
+  box-shadow: none;
+  position: sticky;
+  top: 0;
+  z-index: 20;
+}
+
+.student-back-header {
+  grid-template-columns: 36px minmax(0, 1fr) 36px;
+}
+
+.student-back-header button {
+  width: 34px;
+  height: 34px;
+  border: 0;
+  background: transparent;
+  color: var(--student-text);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  padding: 0;
+}
+
+.student-back-header button svg {
+  width: 25px;
+  height: 25px;
+}
+
+.student-app-header strong,
+.student-back-header strong {
+  text-align: center;
+  font-size: 1.12rem;
+  font-weight: 800;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.student-header-avatar,
+.student-header-avatar-spacer {
+  width: 28px;
+  height: 28px;
+}
+
+.student-header-avatar {
+  border-radius: 50%;
+  overflow: hidden;
+  background: #f5f5f5;
+  display: grid;
+  place-items: center;
+  color: var(--student-text);
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.student-header-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.student-screen {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 14px 16px 96px;
+}
+
+.student-home-screen,
+.student-search-screen,
+.student-store-screen,
+.student-user-screen {
+  align-items: stretch;
+}
+
+.student-balance-section {
+  display: grid;
+  gap: 8px;
+}
+
+.student-balance-section h1,
+.student-store-info h1,
+.student-product-detail-content h1 {
+  color: var(--student-text);
+  font-size: 1.15rem;
+  line-height: 1.2;
+  margin: 0;
+  font-weight: 800;
+}
+
+.student-balance-card {
+  min-height: 96px;
+  border-radius: 30px;
+  background: var(--student-soft);
+
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr);
+  align-items: center;
+  gap: 6px;
+  padding: 16px;
+}
+
+.student-balance-icon {
+  width: 50px;
+  height: 50px;
+  display: grid;
+  place-items: center;
+}
+
+.student-balance-icon img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.student-balance-value {
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  color: var(--student-text);
+}
+
+.student-balance-value strong {
+  font-size: 3rem;
+  line-height: 1.08;
+  font-weight: 650;
+}
+
+.student-balance-value span:not(.student-error):not(.student-muted) {
+  font-size: 1.4rem;
+  line-height: 1;
+  font-weight: 650;
+}
+
+.student-content-section {
+  display: grid;
+  gap: 8px;
+}
+
+.student-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.student-section-header h2 {
+  margin: 0;
+  color: var(--student-text);
+  font-size: 1.12rem;
+  line-height: 1.2;
+  font-weight: 800;
+}
+
+.student-section-header button,
+.student-link-button {
+  border: 0;
+  background: transparent;
+  color: var(--student-text-2);
+  font-size: 0.85rem;
+  text-decoration: underline;
+  cursor: pointer;
+  padding: 0;
+}
+
+.student-link-button {
+  justify-self: center;
+  color: var(--student-brand-dark);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 32px;
+}
+
+.student-horizontal-list,
+.student-partner-list {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  padding: 4px 2px 10px;
+  scrollbar-width: thin;
+}
+
+.student-product-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
+  gap: 12px;
+}
+
+.student-product-card {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 0;
+  text-align: left;
+  cursor: pointer;
+}
+
+.student-horizontal-list .student-product-card {
+  flex: 0 0 132px;
+}
+
+.student-product-media {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  min-height: 118px;
+  border-radius: 14px;
+  overflow: hidden;
+  background: #ffffff;
+  box-shadow: none;
+  display: grid;
+  place-items: center;
+}
+
+.student-product-media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.student-product-card strong {
+  color: var(--student-text);
+  font-size: 0.84rem;
+  line-height: 1.22;
+  font-weight: 800;
+  min-height: 2.05em;
+  overflow-wrap: anywhere;
+}
+
+.student-product-price {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #d99000;
+  font-size: 0.82rem;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.student-product-price img,
+.student-list-amount img {
+  width: 14px;
+  height: 14px;
+  object-fit: contain;
+  flex: 0 0 auto;
+}
+
+.student-product-partner {
+  color: var(--student-text-2);
+  font-size: 0.8rem;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.student-list-row {
+  min-height: 54px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid #e7e7e7;
+}
+
+.student-list-copy {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.student-list-copy strong {
+  color: var(--student-text);
+  font-size: 0.95rem;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.student-list-copy span {
+  color: var(--student-text-2);
+  font-size: 0.82rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.student-list-amount {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--student-text);
+  font-size: 1.08rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.student-list-amount-credit {
+  color: var(--student-brand);
+}
+
+.student-search-bar-wrap {
+  padding: 8px 16px;
+  background: var(--student-bg);
+  position: sticky;
+  top: 64px;
+  z-index: 15;
+}
+
+.student-search-bar {
+  min-height: 43px;
+  border: 1px solid var(--student-line);
+  border-radius: 8px;
+  background: #f7f7f7;
+  box-shadow: none;
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px;
+}
+
+.student-search-bar span {
+  color: #5c5c5c;
+  display: grid;
+  place-items: center;
+}
+
+.student-search-bar svg {
+  width: 18px;
+  height: 18px;
+}
+
+.student-search-bar input {
+  width: 100%;
+  height: 40px;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--student-text);
+  font-size: 0.95rem;
+}
+
+.student-search-bar input::placeholder {
+  color: #9a9a9a;
+}
+
+.student-partner-card {
+  flex: 0 0 96px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  display: grid;
+  gap: 7px;
+  padding: 0;
+  text-align: left;
+  cursor: pointer;
+}
+
+.student-partner-logo {
+  width: 96px;
+  height: 96px;
+  border-radius: 14px;
+  border: 1px solid #ececec;
+  background: #ffffff;
+  box-shadow: none;
+  display: grid;
+  place-items: center;
+}
+
+.student-partner-logo img {
+  width: 70px;
+  height: 70px;
+  object-fit: cover;
+  border-radius: 8px;
+}
+
+.student-partner-logo strong {
+  width: 70px;
+  height: 70px;
+  border-radius: 8px;
+  border: 1px solid #ededed;
+  display: grid;
+  place-items: center;
+  color: var(--student-text);
+  font-size: 1.1rem;
+  font-weight: 900;
+}
+
+.student-partner-card > span:last-child {
+  color: var(--student-text);
+  font-size: 0.82rem;
+  line-height: 1.22;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.student-store-hero,
+.student-product-detail-image {
+  width: 100%;
+  border-radius: 8px;
+  background: #f6f6f6;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+}
+
+.student-store-hero {
+  height: 190px;
+}
+
+.student-product-detail-image {
+  height: 240px;
+  margin-top: 4px;
+}
+
+.student-store-hero img,
+.student-product-detail-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.student-store-info {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 10px;
+}
+
+.student-store-info h1 {
+  overflow-wrap: anywhere;
+}
+
+.student-store-stat {
+  text-align: right;
+  display: grid;
+  gap: 2px;
+}
+
+.student-store-stat span {
+  color: var(--student-text-2);
+  font-size: 0.82rem;
+}
+
+.student-store-stat strong {
+  color: var(--student-text);
+  font-size: 1.1rem;
+  line-height: 1;
+}
+
+.student-product-detail-screen {
+  gap: 14px;
+}
+
+.student-product-detail-content {
+  display: grid;
+  gap: 8px;
+}
+
+.student-product-detail-content h1 {
+  font-size: 1.25rem;
+  overflow-wrap: anywhere;
+}
+
+.student-product-detail-content > p {
+  margin: 0;
+  color: var(--student-text-2);
+  font-size: 0.86rem;
+}
+
+.student-product-detail-price {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #d99000;
+  margin-top: 4px;
+}
+
+.student-product-detail-price img {
+  width: 20px;
+  height: 20px;
+  object-fit: contain;
+}
+
+.student-product-detail-price strong {
+  font-size: 1.62rem;
+  line-height: 1.1;
+  font-weight: 900;
+}
+
+.student-primary-button,
+.student-danger-button {
+  min-height: 48px;
+  border: 0;
+  border-radius: 8px;
+  color: #ffffff;
+  font-size: 1rem;
+  font-weight: 800;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 16px;
+}
+
+.student-primary-button {
+  background: var(--student-brand);
+  color: var(--student-text);
+}
+
+.student-primary-button:hover {
+  background: #dfaa00;
+}
+
+.student-primary-button:disabled,
+.student-danger-button:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.student-redeem-button {
+  width: 100%;
+  margin-top: 4px;
+}
+
+.student-product-description {
+  color: var(--student-text-2);
+  font-size: 0.95rem;
+  line-height: 1.45;
+  margin-top: 4px;
+}
+
+.student-user-screen {
+  gap: 20px;
+}
+
+.student-profile-card {
+  border: 1px solid var(--student-card-line);
+  border-radius: 14px;
+  background: #ffffff;
+  box-shadow: none;
+  display: grid;
+  gap: 16px;
+  padding: 16px;
+}
+
+.student-profile-avatar-button {
+  width: 140px;
+  height: 140px;
+  justify-self: center;
+  position: relative;
+  border: 0;
+  background: transparent;
+  padding: 10px;
+  cursor: pointer;
+}
+
+.student-profile-avatar {
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  background: var(--student-brand);
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+}
+
+.student-profile-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.student-profile-avatar strong {
+  color: #ffffff;
+  font-size: 3.25rem;
+  font-weight: 800;
+}
+
+.student-profile-camera {
+  position: absolute;
+  right: 2px;
+  bottom: 0;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: #f2f2f2;
+  border: 1px solid #d0d0d0;
+  color: #6b6b6b;
+  display: grid;
+  place-items: center;
+  box-shadow: none;
+}
+
+.student-profile-camera svg {
+  width: 18px;
+  height: 18px;
+}
+
+.student-upload-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 2px solid #d0d0d0;
+  border-top-color: var(--student-brand-dark);
+  animation: student-spin 0.8s linear infinite;
+}
+
+.student-avatar-input {
+  display: none;
+}
+
+.student-profile-info {
+  display: grid;
+  gap: 12px;
+}
+
+.student-profile-info-row {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+}
+
+.student-profile-info-row > span {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 1px solid #eed89c;
+  background: #f5f1e3;
+  color: var(--student-text);
+  font-weight: 800;
+  display: grid;
+  place-items: center;
+}
+
+.student-profile-info-row div {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.student-profile-info-row strong {
+  color: var(--student-text);
+  font-size: 0.86rem;
+  font-weight: 800;
+}
+
+.student-profile-info-row p {
+  margin: 0;
+  color: var(--student-text-2);
+  font-size: 0.95rem;
+  overflow-wrap: anywhere;
+}
+
+.student-accordion {
+  border-top: 1px solid var(--student-card-line);
+}
+
+.student-accordion-item {
+  border-bottom: 1px solid var(--student-card-line);
+  display: grid;
+  gap: 8px;
+  padding: 8px 0;
+}
+
+.student-accordion-danger {
+  border-bottom-color: var(--student-error);
+}
+
+.student-accordion-header {
+  border: 0;
+  background: transparent;
+  color: var(--student-text);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 0;
+  text-align: left;
+  cursor: pointer;
+}
+
+.student-accordion-danger .student-accordion-header {
+  color: var(--student-error);
+}
+
+.student-accordion-header span {
+  font-size: 1.12rem;
+  font-weight: 800;
+  transition: transform 0.18s ease;
+}
+
+.student-chevron-open {
+  transform: rotate(90deg);
+}
+
+.student-accordion-header strong {
+  font-size: 0.96rem;
+  font-weight: 800;
+}
+
+.student-accordion-body {
+  display: grid;
+  gap: 10px;
+  padding-left: 22px;
+}
+
+.student-accordion-body p {
+  margin: 0;
+  color: var(--student-text-2);
+  font-size: 0.84rem;
+  line-height: 1.4;
+}
+
+.student-accordion-danger .student-accordion-body p {
+  color: var(--student-error);
+}
+
+.student-danger-button {
+  justify-self: start;
+  min-height: 40px;
+  background: var(--student-error);
+}
+
+.student-danger-button svg {
+  width: 18px;
+  height: 18px;
+}
+
+.student-bottom-nav {
+  position: sticky;
+  bottom: 0;
+  z-index: 25;
+  min-height: 72px;
+  background: var(--student-brand);
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+}
+
+.student-bottom-nav button {
+  height: 46px;
+  border: 0;
+  background: transparent;
+  color: #3d3316;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+
+.student-bottom-nav button.active {
+  color: #ffffff;
+}
+
+.student-bottom-nav svg {
+  width: 28px;
+  height: 28px;
+}
+
+.student-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: rgba(0, 0, 0, 0.34);
+  display: grid;
+  place-items: center;
+  padding: 18px;
+}
+
+.student-modal {
+  width: min(100%, 420px);
+  background: #ffffff;
+  border-radius: 8px;
+  box-shadow: none;
+  padding: 18px;
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  text-align: center;
+}
+
+.student-modal-icon {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-weight: 900;
+  font-size: 1.2rem;
+}
+
+.student-modal-icon-success {
+  background: #d6f3de;
+  color: var(--student-success);
+}
+
+.student-modal-icon-error {
+  background: #fde2e2;
+  color: var(--student-error);
+}
+
+.student-modal h3 {
+  margin: 0;
+  color: var(--student-text);
+  font-size: 0.95rem;
+  font-weight: 800;
+}
+
+.student-modal .student-primary-button {
+  width: 100%;
+}
+
+.student-modal-balance {
+  color: var(--student-text);
+  font-size: 1.15rem;
+}
+
+.student-muted,
+.student-error {
+  margin: 0;
+  font-size: 0.88rem;
+  line-height: 1.4;
+}
+
+.student-muted {
+  color: var(--student-muted);
+}
+
+.student-error {
+  color: var(--student-error);
+}
+
+@keyframes student-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (max-width: 520px) {
+  .student-portal-page {
+    display: block;
+    background: var(--student-bg);
+  }
+
+  .student-app-shell {
+    width: 100%;
+    box-shadow: none;
+  }
+}
+
+@media (max-width: 380px) {
+  .student-screen {
+    padding-inline: 12px;
+  }
+
+  .student-product-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .student-balance-value strong {
+    font-size: 2.6rem;
+  }
+
+  .student-store-info {
+    grid-template-columns: 1fr;
+  }
+
+  .student-store-stat {
+    text-align: left;
+  }
+}
+
+/* 2026 student portal refresh */
+:root {
+  --student-bg: #ffffff;
+  --student-page-bg: var(--ui-bg, #f6f7f3);
+  --student-brand: var(--ui-accent, #b98415);
+  --student-brand-dark: var(--ui-accent-strong, #8f6408);
+  --student-soft: var(--ui-accent-soft, #f4e6bd);
+  --student-text: var(--ui-text, #1f2924);
+  --student-text-2: var(--ui-muted, #65736d);
+  --student-muted: var(--ui-muted, #65736d);
+  --student-line: var(--ui-border, #dce2d8);
+  --student-card-line: var(--ui-border, #dce2d8);
+  --student-error: var(--ui-danger, #b73434);
+  --student-success: var(--ui-success, #2f7a45);
+  --student-shadow: var(--ui-shadow-soft, 0 4px 14px rgba(33, 45, 38, 0.06));
+}
+
+.student-portal-page {
+  background: var(--student-page-bg);
+  color: var(--student-text);
+}
+
+.student-app-shell {
+  border-left: 1px solid var(--student-line);
+  border-right: 1px solid var(--student-line);
+  background: var(--student-bg);
+  box-shadow: none;
+}
+
+.student-app-header,
+.student-back-header {
+  min-height: 62px;
+  background: #17231d;
+  color: #ffffff;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.student-app-header h1,
+.student-back-header h1 {
+  color: #ffffff;
+  letter-spacing: 0;
+}
+
+.student-back-header button,
+.student-header-action {
+  color: #ffffff;
+  border-radius: 8px;
+}
+
+.student-screen {
+  background: var(--student-bg);
+}
+
+.student-home-hero,
+.student-balance-card,
+.student-card,
+.student-product-card,
+.student-store-card,
+.student-modal,
+.student-history-row,
+.student-redemption-card {
+  border: 1px solid var(--student-line);
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: none;
+}
+
+.student-home-hero {
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.86),
+      rgba(255, 255, 255, 0.96)
+    ),
+    var(--student-soft);
+}
+
+.student-section-title,
+.student-home-hero h2,
+.student-balance-value strong,
+.student-product-card h3,
+.student-store-card h3,
+.student-modal h3 {
+  color: var(--ui-heading, #111816);
+  letter-spacing: 0;
+}
+
+.student-muted,
+.student-product-card p,
+.student-store-card p,
+.student-history-row p {
+  color: var(--student-muted);
+}
+
+.student-balance-value,
+.student-price,
+.student-modal-balance {
+  color: var(--student-brand);
+}
+
+.student-primary-button,
+.student-secondary-button,
+.student-tab-button,
+.student-filter-button,
+.student-search input {
+  border-radius: 8px;
+}
+
+.student-primary-button {
+  background: var(--student-brand);
+  color: #ffffff;
+}
+
+.student-primary-button:hover {
+  background: var(--student-brand-dark);
+}
+
+.student-secondary-button,
+.student-tab-button,
+.student-filter-button {
+  border: 1px solid var(--student-line);
+  background: #ffffff;
+  color: var(--student-text);
+}
+
+.student-tab-button.is-active,
+.student-filter-button.is-active {
+  border-color: rgba(185, 132, 21, 0.24);
+  background: var(--student-soft);
+  color: var(--student-brand-dark);
+}
+
+.student-search {
+  border: 1px solid var(--student-line);
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: none;
+}
+
+.student-search input {
+  color: var(--student-text);
+}
+
+.student-bottom-nav {
+  border-top: 1px solid var(--student-line);
+  background: rgba(255, 255, 255, 0.96);
+  backdrop-filter: blur(10px);
+}
+
+.student-bottom-nav a,
+.student-bottom-nav button {
+  color: var(--student-muted);
+}
+
+.student-bottom-nav .is-active {
+  color: var(--student-brand-dark);
+}
+
+@media (max-width: 520px) {
+  .student-app-shell {
+    border: 0;
+    box-shadow: none;
+  }
+}
+
+/* Student portal admin visual parity */
+:root {
+  --student-bg: var(--ui-surface, #ffffff);
+  --student-page-bg: var(--ui-bg, #f6f7f3);
+  --student-brand: var(--ui-accent, #b98415);
+  --student-brand-dark: var(--ui-accent-strong, #8f6408);
+  --student-soft: var(--ui-accent-soft, #f4e6bd);
+  --student-text: var(--ui-text, #1f2924);
+  --student-text-2: var(--ui-muted, #65736d);
+  --student-muted: var(--ui-muted, #65736d);
+  --student-line: var(--ui-border, #dce2d8);
+  --student-card-line: var(--ui-border, #dce2d8);
+  --student-error: var(--ui-danger, #b73434);
+  --student-success: var(--ui-success, #2f7a45);
+  --student-shell-image: url("/fundo.png");
+}
+
+.student-portal-page {
+  background:
+    linear-gradient(180deg, rgba(246, 247, 243, 0.72), rgba(246, 247, 243, 0.92)),
+    center / cover no-repeat var(--student-shell-image),
+    var(--student-page-bg);
+  color: var(--student-text);
+  font-family: Inter, "Segoe UI", Roboto, Arial, sans-serif;
+}
+
+.student-app-shell {
+  width: min(100%, 480px);
+  border-left: 1px solid rgba(15, 23, 42, 0.08);
+  border-right: 1px solid rgba(15, 23, 42, 0.08);
+  background: var(--student-bg);
+  box-shadow: none;
+}
+
+.student-app-view,
+.student-screen {
+  background: var(--student-bg);
+}
+
+.student-app-header,
+.student-back-header {
+  min-height: 62px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0)),
+    center / cover no-repeat var(--student-shell-image),
+    var(--student-soft);
+  color: #161616;
+  border-radius: 0;
+  border-bottom: 1px solid rgba(22, 18, 4, 0.18);
+  box-shadow: none;
+}
+
+.student-app-header strong,
+.student-back-header strong,
+.student-app-header h1,
+.student-back-header h1 {
+  color: #161616;
+  font-size: 1rem;
+  font-weight: 780;
+  letter-spacing: 0;
+}
+
+.student-back-header button,
+.student-header-action {
+  border-radius: 8px;
+  color: #161616;
+}
+
+.student-back-header button:hover,
+.student-header-action:hover {
+  background: rgba(40, 40, 40, 0.12);
+}
+
+.student-header-avatar {
+  border: 1px solid rgba(22, 18, 4, 0.16);
+  background: rgba(255, 255, 255, 0.78);
+  color: #161616;
+}
+
+.student-screen {
+  gap: 18px;
+  padding: 16px 16px 96px;
+}
+
+.student-balance-section h1,
+.student-section-header h2,
+.student-store-info h1,
+.student-product-detail-content h1,
+.student-list-copy strong,
+.student-product-card strong,
+.student-partner-card > span:last-child,
+.student-profile-info-row strong,
+.student-accordion-header strong,
+.student-modal h3 {
+  color: var(--ui-heading, #111816);
+  letter-spacing: 0;
+}
+
+.student-balance-section h1,
+.student-section-header h2 {
+  font-size: 1rem;
+  font-weight: 800;
+}
+
+.student-balance-card {
+  min-height: 104px;
+  grid-template-columns: 58px minmax(0, 1fr);
+  border: 1px solid rgba(185, 132, 21, 0.18);
+  border-radius: 8px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.86), rgba(255, 255, 255, 0.96)),
+    var(--student-soft);
+  box-shadow: none;
+}
+
+.student-balance-icon {
+  width: 52px;
+  height: 52px;
+}
+
+.student-balance-value {
+  color: var(--student-brand);
+}
+
+.student-balance-value strong {
+  color: var(--student-brand);
+  font-size: 2.85rem;
+  font-weight: 780;
+}
+
+.student-balance-value span:not(.student-error):not(.student-muted) {
+  color: var(--student-brand);
+  font-weight: 780;
+}
+
+.student-section-header button,
+.student-link-button {
+  color: var(--student-brand-dark);
+  font-size: 0.84rem;
+  font-weight: 750;
+}
+
+.student-horizontal-list,
+.student-partner-list {
+  padding: 4px 2px 12px;
+  scrollbar-color: rgba(101, 115, 109, 0.35) transparent;
+}
+
+.student-product-card {
+  border: 1px solid var(--student-line);
+  border-radius: 8px;
+  background: var(--student-bg);
+  gap: 8px;
+  padding: 10px;
+  transition:
+    background-color 0.18s ease,
+    border-color 0.18s ease,
+    transform 0.18s ease;
+}
+
+.student-product-card:hover,
+.student-product-card:focus-visible {
+  border-color: var(--ui-border-strong, #c5d0c4);
+  background: var(--ui-surface-soft, #f9faf7);
+  transform: translateY(-1px);
+  outline: none;
+}
+
+.student-horizontal-list .student-product-card {
+  flex-basis: 148px;
+}
+
+.student-product-media,
+.student-partner-logo,
+.student-store-hero,
+.student-product-detail-image {
+  border: 1px solid var(--student-line);
+  border-radius: 8px;
+  background: var(--ui-surface-soft, #f9faf7);
+  box-shadow: none;
+}
+
+.student-product-media {
+  min-height: 118px;
+}
+
+.student-product-media img,
+.student-store-hero img,
+.student-product-detail-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.student-product-media img[src="/euras-coin.png"],
+.student-store-hero img[src="/euras-coin.png"],
+.student-product-detail-image img[src="/euras-coin.png"] {
+  object-fit: contain;
+  padding: 22px;
+}
+
+.student-product-card strong {
+  font-size: 0.86rem;
+  min-height: auto;
+}
+
+.student-product-price,
+.student-product-detail-price,
+.student-list-amount-credit {
+  color: var(--student-brand);
+}
+
+.student-product-price {
+  font-size: 0.82rem;
+}
+
+.student-product-partner,
+.student-list-copy span,
+.student-store-stat span,
+.student-product-detail-content > p,
+.student-product-description,
+.student-profile-info-row p,
+.student-accordion-body p,
+.student-muted {
+  color: var(--student-muted);
+}
+
+.student-list-row {
+  min-height: 58px;
+  border: 1px solid var(--student-line);
+  border-radius: 8px;
+  background: var(--student-bg);
+  padding: 10px 12px;
+}
+
+.student-list-row + .student-list-row {
+  margin-top: 8px;
+}
+
+.student-list-amount {
+  color: var(--student-text);
+}
+
+.student-search-bar-wrap {
+  background: var(--student-bg);
+  border-bottom: 1px solid var(--student-line);
+}
+
+.student-search-bar {
+  min-height: 44px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 14px;
+  background: var(--student-bg);
+}
+
+.student-search-bar input {
+  color: var(--student-text);
+}
+
+.student-search-bar input::placeholder {
+  color: #7d7d7d;
+}
+
+.student-partner-card {
+  flex-basis: 104px;
+  gap: 8px;
+}
+
+.student-partner-card:hover .student-partner-logo,
+.student-partner-card:focus-visible .student-partner-logo {
+  border-color: var(--ui-border-strong, #c5d0c4);
+  background: var(--ui-surface-soft, #f9faf7);
+}
+
+.student-partner-logo {
+  width: 104px;
+  height: 104px;
+}
+
+.student-partner-logo img,
+.student-partner-logo strong {
+  width: 76px;
+  height: 76px;
+  border-radius: 8px;
+}
+
+.student-partner-logo strong {
+  border: 1px solid rgba(185, 132, 21, 0.18);
+  background:
+    center / cover no-repeat var(--student-shell-image),
+    var(--student-soft);
+  color: #161616;
+}
+
+.student-store-hero {
+  height: 190px;
+}
+
+.student-store-info {
+  border: 1px solid var(--student-line);
+  border-radius: 8px;
+  background: var(--student-bg);
+  padding: 12px;
+}
+
+.student-store-stat strong {
+  color: var(--student-brand);
+}
+
+.student-product-detail-image {
+  height: 240px;
+}
+
+.student-product-detail-price strong {
+  color: var(--student-brand);
+  font-weight: 820;
+}
+
+.student-primary-button,
+.student-danger-button {
+  border-radius: 8px;
+  box-shadow: none;
+  transition:
+    transform 0.18s ease,
+    background 0.18s ease,
+    color 0.18s ease;
+}
+
+.student-primary-button {
+  border: 1px solid rgba(185, 132, 21, 0.22);
+  background: linear-gradient(
+    180deg,
+    var(--student-soft) 0%,
+    var(--student-brand) 100%
+  );
+  color: #111827;
+}
+
+.student-primary-button:hover {
+  background: linear-gradient(
+    180deg,
+    var(--student-soft) 0%,
+    var(--student-brand-dark) 100%
+  );
+  color: #111827;
+  transform: translateY(-1px);
+}
+
+.student-danger-button {
+  border: 1px solid rgba(183, 52, 52, 0.25);
+  background: var(--ui-danger-soft, #f8dddd);
+  color: var(--student-error);
+}
+
+.student-danger-button:hover {
+  background: var(--student-error);
+  color: #ffffff;
+  transform: translateY(-1px);
+}
+
+.student-profile-card,
+.student-modal {
+  border: 1px solid var(--student-line);
+  border-radius: 8px;
+  background: var(--student-bg);
+  box-shadow: none;
+}
+
+.student-profile-avatar-button {
+  width: 132px;
+  height: 132px;
+}
+
+.student-profile-avatar {
+  width: 112px;
+  height: 112px;
+  border: 1px solid rgba(185, 132, 21, 0.22);
+  background:
+    center / cover no-repeat var(--student-shell-image),
+    var(--student-soft);
+}
+
+.student-profile-avatar strong {
+  color: #161616;
+}
+
+.student-profile-camera {
+  border: 1px solid var(--student-line);
+  background: var(--student-bg);
+  color: var(--student-muted);
+}
+
+.student-profile-info-row > span {
+  border: 1px solid rgba(185, 132, 21, 0.18);
+  background: var(--student-soft);
+  color: var(--student-brand-dark);
+}
+
+.student-accordion {
+  border-top: 1px solid var(--student-line);
+}
+
+.student-accordion-item {
+  border-bottom: 1px solid var(--student-line);
+}
+
+.student-accordion-danger {
+  border-bottom-color: rgba(183, 52, 52, 0.35);
+}
+
+.student-accordion-header {
+  color: var(--student-text);
+}
+
+.student-accordion-danger .student-accordion-header {
+  color: var(--student-error);
+}
+
+.student-modal-backdrop {
+  background: rgba(15, 24, 20, 0.48);
+  backdrop-filter: blur(6px);
+}
+
+.student-modal-icon-success {
+  background: var(--ui-success-soft, #dff1e5);
+  color: var(--student-success);
+}
+
+.student-modal-icon-error {
+  background: var(--ui-danger-soft, #f8dddd);
+  color: var(--student-error);
+}
+
+.student-modal-balance {
+  color: var(--student-brand);
+}
+
+.student-error {
+  color: var(--student-error);
+}
+
+.student-bottom-nav {
+  min-height: 72px;
+  border-top: 1px solid rgba(22, 18, 4, 0.18);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0)),
+    center / cover no-repeat var(--student-shell-image),
+    var(--student-soft);
+  backdrop-filter: none;
+}
+
+.student-bottom-nav button {
+  height: 46px;
+  border-radius: 8px;
+  color: rgba(0, 0, 0, 0.75);
+}
+
+.student-bottom-nav button:hover,
+.student-bottom-nav button:focus-visible {
+  background: rgba(40, 40, 40, 0.12);
+  outline: none;
+}
+
+.student-bottom-nav button.active,
+.student-bottom-nav .is-active {
+  background: rgba(40, 40, 40, 0.898);
+  color: #ffffff;
+}
+
+@media (max-width: 520px) {
+  .student-portal-page {
+    background: var(--student-bg);
+  }
+
+  .student-app-shell {
+    border: 0;
+  }
+}
+
+@media (max-width: 380px) {
+  .student-screen {
+    padding-inline: 12px;
+  }
+
+  .student-horizontal-list .student-product-card {
+    flex-basis: 136px;
+  }
+
+  .student-product-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .student-balance-value strong {
+    font-size: 2.45rem;
+  }
+}
+
+/* Student portal modal polish */
+.student-portal-page .student-modal-backdrop {
+  background: rgba(15, 24, 20, 0.48);
+  backdrop-filter: blur(6px);
+}
+
+.student-portal-page .student-modal {
+  position: relative;
+  width: min(100%, 420px);
+  border: 1px solid var(--student-line);
+  border-radius: 8px;
+  background: var(--student-bg);
+  box-shadow: 0 18px 48px rgba(15, 24, 20, 0.16);
+}
+
+.student-portal-page .student-modal-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--student-muted);
+  display: inline-grid;
+  place-items: center;
+  padding: 0;
+  transition:
+    background 0.18s ease,
+    color 0.18s ease,
+    transform 0.18s ease;
+}
+
+.student-portal-page .student-modal-close:hover,
+.student-portal-page .student-modal-close:focus-visible {
+  background: var(--student-soft);
+  color: var(--student-text);
+  outline: none;
+  transform: translateY(-1px);
+}
+
+.student-portal-page .student-modal-close svg {
+  width: 18px;
+  height: 18px;
+}
+
+.student-portal-page .student-modal h3 {
+  font-size: 1.22rem;
+  line-height: 1.2;
+}
+
+.student-portal-page .student-modal p {
+  font-size: 0.96rem;
+  line-height: 1.4;
+}
+
+.student-portal-page .student-modal-balance {
+  font-size: 1.9rem;
+  line-height: 1.08;
+}

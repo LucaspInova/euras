@@ -514,7 +514,8 @@ export default function PartnerPortalActivities() {
                               : 'partner-activities-amount'
                           }
                         >
-                          &lt; {formatEuras(activity.amountEuras)}
+                          <span className="euras-inline-coin" aria-hidden="true" />
+                          {formatEuras(activity.amountEuras)}
                         </p>
                         <span>{activity.occurredAtLabel}</span>
                       </div>

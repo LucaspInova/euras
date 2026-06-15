@@ -1,103 +1,246 @@
-import { useEffect, useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import SidebarLayout from '../components/SidebarLayout'
-import { getPartnerApiErrorMessage, listPartners } from '../lib/partnersApi'
+import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import SidebarLayout from "../components/SidebarLayout";
+import {
+  getPartnerApiErrorMessage,
+  listPartners,
+  setPartnerActivation,
+} from "../lib/partnersApi";
 
 function SearchIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
-      <circle cx="10.5" cy="10.5" r="5.8" fill="none" stroke="currentColor" strokeWidth="2" />
-      <path d="m15.2 15.2 4.3 4.3" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+      <circle
+        cx="10.5"
+        cy="10.5"
+        r="5.8"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+      />
+      <path
+        d="m15.2 15.2 4.3 4.3"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
     </svg>
-  )
+  );
 }
 
 function AddPartnerIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M3.8 8.4h16.4L18.9 5H5.1L3.8 8.4Z" fill="none" stroke="currentColor" strokeWidth="1.6" />
-      <path d="M5 9.6v9.4h14V9.6H5Z" fill="none" stroke="currentColor" strokeWidth="1.6" />
-      <path d="M12 12v5M9.5 14.5h5" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" />
+      <path
+        d="M3.8 8.4h16.4L18.9 5H5.1L3.8 8.4Z"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.6"
+      />
+      <path
+        d="M5 9.6v9.4h14V9.6H5Z"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.6"
+      />
+      <path
+        d="M12 12v5M9.5 14.5h5"
+        stroke="currentColor"
+        strokeWidth="1.9"
+        strokeLinecap="round"
+      />
     </svg>
-  )
+  );
 }
 
 function PartnerLogo({ label, variant }) {
-  if (variant === 'black') {
-    return <div className="partner-logo partner-logo-black">{label}</div>
+  if (variant === "black") {
+    return <div className="partner-logo partner-logo-black">{label}</div>;
   }
 
-  if (variant === 'blue') {
-    return <div className="partner-logo partner-logo-blue">{label}</div>
+  if (variant === "blue") {
+    return <div className="partner-logo partner-logo-blue">{label}</div>;
   }
 
-  return <div className="partner-logo partner-logo-light">{label}</div>
+  return <div className="partner-logo partner-logo-light">{label}</div>;
 }
 
 function normalize(text) {
-  return text.normalize('NFD').replace(/\p{Diacritic}/gu, '').toUpperCase()
+  return text
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toUpperCase();
 }
 
 export default function Partners() {
-  const navigate = useNavigate()
-  const [partners, setPartners] = useState([])
-  const [loadingPartners, setLoadingPartners] = useState(true)
-  const [loadError, setLoadError] = useState('')
-  const [searchTerm, setSearchTerm] = useState('')
+  const navigate = useNavigate();
+  const [partners, setPartners] = useState([]);
+  const [loadingPartners, setLoadingPartners] = useState(true);
+  const [loadError, setLoadError] = useState("");
+  const [searchTerm, setSearchTerm] = useState("");
+  const [togglingPartnerId, setTogglingPartnerId] = useState("");
+  const [toggleMessage, setToggleMessage] = useState("");
+  const [toggleError, setToggleError] = useState("");
 
   useEffect(() => {
-    let active = true
+    let active = true;
 
     async function load() {
-      setLoadingPartners(true)
-      setLoadError('')
+      setLoadingPartners(true);
+      setLoadError("");
 
       try {
-        const nextPartners = await listPartners()
+        const nextPartners = await listPartners();
 
-        if (!active) return
-        setPartners(nextPartners)
+        if (!active) return;
+        setPartners(nextPartners);
       } catch (error) {
-        if (!active) return
-        console.info('Falha ao carregar parceiros no banco.', error)
-        setLoadError(getPartnerApiErrorMessage(error))
+        if (!active) return;
+        console.info("Falha ao carregar parceiros no banco.", error);
+        setLoadError(getPartnerApiErrorMessage(error));
       } finally {
         if (active) {
-          setLoadingPartners(false)
+          setLoadingPartners(false);
         }
       }
     }
 
-    load()
+    load();
 
     return () => {
-      active = false
-    }
-  }, [])
+      active = false;
+    };
+  }, []);
 
-  const filteredCeeds = useMemo(() => {
-    const ceedsPartners = partners.filter((partner) => partner.group === 'ceeds')
-    const search = normalize(searchTerm.trim())
-
-    if (!search) {
-      return ceedsPartners
-    }
-
-    return ceedsPartners.filter((partner) => normalize(`${partner.name} ${partner.campus}`).includes(search))
-  }, [partners, searchTerm])
-
-  const filteredExternal = useMemo(() => {
-    const externalPartners = partners.filter((partner) => partner.group === 'external')
-    const search = normalize(searchTerm.trim())
+  const filteredPartners = useMemo(() => {
+    const search = normalize(searchTerm.trim());
 
     if (!search) {
-      return externalPartners
+      return partners;
     }
 
-    return externalPartners.filter((partner) => normalize(`${partner.name} ${partner.campus}`).includes(search))
-  }, [partners, searchTerm])
+    return partners.filter((partner) =>
+      normalize(`${partner.name} ${partner.campus}`).includes(search),
+    );
+  }, [partners, searchTerm]);
 
-  const hasNoPartners = !loadingPartners && !loadError && partners.length === 0
+  const activePartners = useMemo(
+    () => filteredPartners.filter((partner) => partner.active),
+    [filteredPartners],
+  );
+
+  const inactivePartners = useMemo(
+    () => filteredPartners.filter((partner) => !partner.active),
+    [filteredPartners],
+  );
+
+  const partnerCounts = useMemo(
+    () => ({
+      total: partners.length,
+      active: partners.filter((partner) => partner.active).length,
+      inactive: partners.filter((partner) => !partner.active).length,
+    }),
+    [partners],
+  );
+
+  const hasNoPartners = !loadingPartners && !loadError && partners.length === 0;
+
+  async function handlePartnerActivationToggle(partner) {
+    const nextActive = !partner.active;
+    setTogglingPartnerId(partner.id);
+    setToggleMessage("");
+    setToggleError("");
+
+    try {
+      await setPartnerActivation(partner.id, nextActive);
+      setPartners((currentPartners) =>
+        currentPartners.map((currentPartner) =>
+          currentPartner.id === partner.id
+            ? { ...currentPartner, active: nextActive }
+            : currentPartner,
+        ),
+      );
+      setToggleMessage(
+        `${partner.name} ${nextActive ? "ativado" : "desativado"} com sucesso.`,
+      );
+    } catch (error) {
+      console.info("Falha ao atualizar status do parceiro.", error);
+      setToggleError(getPartnerApiErrorMessage(error));
+    } finally {
+      setTogglingPartnerId("");
+    }
+  }
+
+  function renderPartnerCard(partner) {
+    const isToggling = togglingPartnerId === partner.id;
+    const logoLabel = partner.group === "ceeds" ? "CEEDS" : partner.logo;
+    const logoVariant = partner.group === "ceeds" ? "light" : partner.variant;
+
+    const cardHeader = (
+      <div className="partner-card-logo partner-card-header">
+        {partner.imageUrl ? (
+          <img
+            src={partner.imageUrl}
+            alt={partner.name}
+            className="partner-card-image"
+            loading="lazy"
+            decoding="async"
+          />
+        ) : (
+          <PartnerLogo label={logoLabel} variant={logoVariant} />
+        )}
+        <p>{partner.campus}</p>
+      </div>
+    );
+
+    return (
+      <article
+        key={partner.id}
+        className={`partner-card ${partner.active ? "partner-card-active" : "partner-card-inactive"}`}
+      >
+        {partner.active ? (
+          <button
+            type="button"
+            className="partner-card-logo partner-card-link"
+            onClick={() => {
+              navigate(`/parceiros/${partner.id}`);
+            }}
+          >
+            {cardHeader}
+          </button>
+        ) : (
+          cardHeader
+        )}
+
+        <div className="partner-card-body">
+          <strong>{partner.name}</strong>
+          <div className="partner-card-status-row">
+            <span
+              className={`partner-status-chip ${
+                partner.active
+                  ? "partner-status-active"
+                  : "partner-status-inactive"
+              }`}
+            >
+              {partner.active ? "Ativo" : "Inativo"}
+            </span>
+            <button
+              type="button"
+              className={`partner-activation-toggle ${partner.active ? "is-active" : ""}`}
+              role="switch"
+              aria-checked={partner.active}
+              aria-label={`${partner.active ? "Desativar" : "Ativar"} ${partner.name}`}
+              disabled={isToggling}
+              onClick={() => handlePartnerActivationToggle(partner)}
+            >
+              <span />
+            </button>
+          </div>
+        </div>
+      </article>
+    );
+  }
 
   return (
     <SidebarLayout>
@@ -118,7 +261,11 @@ export default function Partners() {
               />
             </label>
 
-            <button type="button" className="partners-add-button" onClick={() => navigate('/parceiros/novo')}>
+            <button
+              type="button"
+              className="partners-add-button"
+              onClick={() => navigate("/parceiros/novo")}
+            >
               <span className="partners-add-icon">
                 <AddPartnerIcon />
               </span>
@@ -127,78 +274,53 @@ export default function Partners() {
           </div>
         </div>
 
-        <section className="partners-group" aria-label="Grupo Ceeds">
-          <h2>Grupo Ceeds</h2>
+        <div className="partners-overview" aria-live="polite">
+          <span>{partnerCounts.total} parceiros</span>
+          <span>{partnerCounts.active} ativos</span>
+          <span>{partnerCounts.inactive} inativos</span>
+        </div>
 
-          {loadingPartners ? <div className="students-empty-state">Carregando parceiros...</div> : null}
-          {loadError && !loadingPartners ? <div className="students-empty-state">{loadError}</div> : null}
-          {hasNoPartners ? <div className="students-empty-state">Nenhum parceiro cadastrado.</div> : null}
+        {toggleMessage ? (
+          <p className="partners-feedback partners-feedback-success">
+            {toggleMessage}
+          </p>
+        ) : null}
+        {toggleError ? (
+          <p className="partners-feedback partners-feedback-error">
+            {toggleError}
+          </p>
+        ) : null}
 
-          <div className="partners-grid partners-grid-ceeds">
+        {loadingPartners ? (
+          <div className="students-empty-state">Carregando parceiros...</div>
+        ) : null}
+        {loadError && !loadingPartners ? (
+          <div className="students-empty-state">{loadError}</div>
+        ) : null}
+        {hasNoPartners ? (
+          <div className="students-empty-state">
+            Nenhum parceiro cadastrado.
+          </div>
+        ) : null}
+
+        <section className="partners-group" aria-label="Parceiros ativos">
+          <h2>Ativos</h2>
+          <div className="partners-grid">
             {!loadingPartners && !loadError
-              ? filteredCeeds.map((partner) => (
-              <article key={partner.id} className="partner-card">
-                <button
-                  type="button"
-                  className="partner-card-logo partner-card-link"
-                  onClick={() => {
-                    navigate(`/parceiros/${partner.id}`)
-                  }}
-                >
-                  {partner.imageUrl ? (
-                    <img
-                      src={partner.imageUrl}
-                      alt={partner.name}
-                      className="partner-card-image"
-                      loading="lazy"
-                      decoding="async"
-                    />
-                  ) : (
-                    <PartnerLogo label="CEEDS" variant="light" />
-                  )}
-                  <p>{partner.campus}</p>
-                </button>
-                <strong>{partner.name}</strong>
-              </article>
-                ))
+              ? activePartners.map((partner) => renderPartnerCard(partner))
               : null}
           </div>
         </section>
 
-        <section className="partners-group" aria-label="Parceiros externos">
-          <h2>Parceiros externos</h2>
-
+        <section className="partners-group" aria-label="Parceiros inativos">
+          <h2>Inativos</h2>
           <div className="partners-grid">
             {!loadingPartners && !loadError
-              ? filteredExternal.map((partner) => (
-              <article key={partner.id} className="partner-card">
-                <button
-                  type="button"
-                  className="partner-card-logo partner-card-link"
-                  onClick={() => {
-                    navigate(`/parceiros/${partner.id}`)
-                  }}
-                >
-                  {partner.imageUrl ? (
-                    <img
-                      src={partner.imageUrl}
-                      alt={partner.name}
-                      className="partner-card-image"
-                      loading="lazy"
-                      decoding="async"
-                    />
-                  ) : (
-                    <PartnerLogo label={partner.logo} variant={partner.variant} />
-                  )}
-                  <p>{partner.campus}</p>
-                </button>
-                <strong>{partner.name}</strong>
-              </article>
-                ))
+              ? inactivePartners.map((partner) => renderPartnerCard(partner))
               : null}
           </div>
         </section>
       </section>
     </SidebarLayout>
-  )
+  );
 }

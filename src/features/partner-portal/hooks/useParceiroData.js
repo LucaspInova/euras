@@ -175,36 +175,6 @@ async function resolveLoggedPartnerProfile(supabase) {
   }
 }
 
-async function findPartnerByAuthUserId(supabase, authUserId) {
-  if (!authUserId) {
-    return null
-  }
-
-  const relationCandidates = ['user_id', 'auth_user_id']
-
-  for (const relationColumn of relationCandidates) {
-    const partnerQuery = await supabase
-      .schema('euras')
-      .from('parceiros')
-      .select('*')
-      .eq(relationColumn, authUserId)
-      .limit(1)
-      .maybeSingle()
-
-    if (!partnerQuery.error) {
-      return mapPartnerRow(partnerQuery.data)
-    }
-
-    if (isMissingColumnError(partnerQuery.error, relationColumn)) {
-      continue
-    }
-
-    throw partnerQuery.error
-  }
-
-  return null
-}
-
 async function findPartnerByProfileId(supabase, profileId) {
   if (!profileId) {
     return null
@@ -246,32 +216,13 @@ async function findProfileFallbackByProfileId(supabase, profileId) {
 }
 
 async function resolveLoggedPartnerContext(supabase) {
-  const { data: authData, error: authError } = await supabase.auth.getUser()
-  if (authError) {
-    throw authError
-  }
-
-  const authUserId = authData?.user?.id ?? null
-  if (!authUserId) {
-    return { profileId: null, partner: null, partnerId: null }
-  }
-
-  const partnerByAuthUser = await findPartnerByAuthUserId(supabase, authUserId)
-  if (partnerByAuthUser?.perfil_parceiro_id) {
-    return {
-      profileId: partnerByAuthUser.perfil_parceiro_id,
-      partner: partnerByAuthUser,
-      partnerId: partnerByAuthUser.perfil_parceiro_id,
-    }
-  }
-
   const { profile } = await resolveLoggedProfileByAuthUserId(supabase)
   const profileId = profile?.id ?? null
   if (!profileId) {
-    return { profileId: null, partner: partnerByAuthUser, partnerId: null }
+    return { profileId: null, partner: null, partnerId: null }
   }
 
-  const partnerByProfile = partnerByAuthUser ?? (await findPartnerByProfileId(supabase, profileId))
+  const partnerByProfile = await findPartnerByProfileId(supabase, profileId)
 
   return {
     profileId,

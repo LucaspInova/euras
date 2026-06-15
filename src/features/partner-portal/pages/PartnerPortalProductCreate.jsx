@@ -240,7 +240,7 @@ export default function PartnerPortalProductCreate() {
                 <div className="portal-product-value-block">
                   <span>Valor:</span>
                   <label className="portal-product-value-row">
-                    <strong className="portal-product-value-symbol">&lt;</strong>
+                    <span className="portal-product-value-symbol" aria-hidden="true" />
                     <input type="text" value={form.value} onChange={handleFieldChange('value')} />
                   </label>
                 </div>

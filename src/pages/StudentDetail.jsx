@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Navigate, useNavigate, useParams } from 'react-router-dom'
 import SidebarLayout from '../components/SidebarLayout'
+import { useModalDismiss } from '../hooks/useModalDismiss'
 import { formatDateInput, formatPhoneInput } from '../lib/studentFormatters'
 import { getStudentApiErrorMessage, getStudentById, removeStudent, updateStudent } from '../lib/studentsApi'
 
@@ -89,6 +90,13 @@ export default function StudentDetail() {
       active = false
     }
   }, [studentId])
+
+  const closeDeleteModal = () => {
+    if (isRemoving) return
+    setShowDeleteModal(false)
+  }
+
+  useModalDismiss(showDeleteModal, closeDeleteModal, isRemoving)
 
   if (!loadingStudent && !loadError && (!student || !form)) {
     return <Navigate to="/alunos" replace />
@@ -184,7 +192,10 @@ export default function StudentDetail() {
 
               <div className="student-balance-block">
                 <span>Saldo:</span>
-                <strong>{`< ${form.balance}`}</strong>
+                <strong className="euras-inline-value">
+                  <span className="euras-inline-coin" aria-hidden="true" />
+                  {form.balance}
+                </strong>
               </div>
             </div>
 
@@ -241,13 +252,25 @@ export default function StudentDetail() {
         </div>
 
         {showDeleteModal ? (
-          <div className="student-modal-backdrop" role="presentation">
-            <div className="student-remove-modal" role="dialog" aria-modal="true" aria-label="Remover aluno">
+          <div
+            className="student-modal-backdrop"
+            role="presentation"
+            onMouseDown={(event) => {
+              if (event.target === event.currentTarget) closeDeleteModal()
+            }}
+          >
+            <div
+              className="student-remove-modal"
+              role="dialog"
+              aria-modal="true"
+              aria-label="Remover aluno"
+              onMouseDown={(event) => event.stopPropagation()}
+            >
               <button
                 type="button"
                 className="student-modal-close"
                 aria-label="Fechar aviso de remoção"
-                onClick={() => setShowDeleteModal(false)}
+                onClick={closeDeleteModal}
               >
                 <CloseIcon />
               </button>

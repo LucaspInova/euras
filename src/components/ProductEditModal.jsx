@@ -1,6 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Navigate, useNavigate, useParams } from 'react-router-dom'
-import SidebarLayout from '../components/SidebarLayout'
 import { useModalDismiss } from '../hooks/useModalDismiss'
 import { buildOptimizedImageDataUrl } from '../lib/imageUpload'
 import {
@@ -9,21 +7,6 @@ import {
   removeProduct,
   updateProduct,
 } from '../lib/partnersApi'
-
-function BackIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path
-        d="M19 12H6M11.5 6.5 6 12l5.5 5.5"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  )
-}
 
 function ProductPhotoIcon() {
   return (
@@ -69,25 +52,40 @@ function mapProductToForm(product) {
   }
 }
 
-export default function ProductDetail() {
-  const navigate = useNavigate()
-  const { productId } = useParams()
+export default function ProductEditModal({ productId, onClose, onSaved, onRemoved }) {
   const fileInputRef = useRef(null)
-  const [loading, setLoading] = useState(true)
+  const isOpen = Boolean(productId)
+  const [loading, setLoading] = useState(false)
   const [loadError, setLoadError] = useState('')
   const [formError, setFormError] = useState('')
   const [isSaving, setIsSaving] = useState(false)
   const [isRemoving, setIsRemoving] = useState(false)
-  const [showRemoveModal, setShowRemoveModal] = useState(false)
   const [form, setForm] = useState(null)
   const [initialForm, setInitialForm] = useState(null)
+  const isBusy = isSaving || isRemoving
+
+  const closeModal = () => {
+    if (isBusy) return
+    onClose()
+  }
+
+  useModalDismiss(isOpen, closeModal, isBusy)
 
   useEffect(() => {
+    if (!productId) {
+      setForm(null)
+      setInitialForm(null)
+      setLoadError('')
+      setFormError('')
+      return undefined
+    }
+
     let active = true
 
-    async function load() {
+    async function loadProduct() {
       setLoading(true)
       setLoadError('')
+      setFormError('')
 
       try {
         const product = await getProductById(productId)
@@ -96,6 +94,7 @@ export default function ProductDetail() {
         if (!product) {
           setForm(null)
           setInitialForm(null)
+          setLoadError('Produto nao encontrado.')
           return
         }
 
@@ -112,12 +111,28 @@ export default function ProductDetail() {
       }
     }
 
-    load()
+    loadProduct()
 
     return () => {
       active = false
     }
   }, [productId])
+
+  const hasChanges = useMemo(() => {
+    if (!form || !initialForm) return false
+
+    return (
+      form.name.trim() !== initialForm.name.trim() ||
+      form.institution.trim() !== initialForm.institution.trim() ||
+      form.value.trim() !== initialForm.value.trim() ||
+      form.description.trim() !== initialForm.description.trim() ||
+      form.imageUrl !== initialForm.imageUrl
+    )
+  }, [form, initialForm])
+
+  if (!isOpen) {
+    return null
+  }
 
   const handleFieldChange = (field) => (event) => {
     setForm((current) => ({ ...current, [field]: event.target.value }))
@@ -131,12 +146,10 @@ export default function ProductDetail() {
     const file = event.target.files?.[0]
     event.target.value = ''
 
-    if (!file) {
-      return
-    }
+    if (!file) return
 
     if (!file.type.startsWith('image/')) {
-      setFormError('Selecione um arquivo de imagem válido.')
+      setFormError('Selecione um arquivo de imagem valido.')
       return
     }
 
@@ -145,23 +158,9 @@ export default function ProductDetail() {
       setForm((current) => ({ ...current, imageUrl: optimizedImageDataUrl }))
       setFormError('')
     } catch (error) {
-      setFormError(error?.message ?? 'Não foi possível carregar essa imagem.')
+      setFormError(error?.message ?? 'Nao foi possivel carregar essa imagem.')
     }
   }
-
-  const hasChanges = useMemo(() => {
-    if (!form || !initialForm) {
-      return false
-    }
-
-    return (
-      form.name.trim() !== initialForm.name.trim() ||
-      form.institution.trim() !== initialForm.institution.trim() ||
-      form.value.trim() !== initialForm.value.trim() ||
-      form.description.trim() !== initialForm.description.trim() ||
-      form.imageUrl !== initialForm.imageUrl
-    )
-  }, [form, initialForm])
 
   const handleSubmit = async (event) => {
     event.preventDefault()
@@ -175,7 +174,7 @@ export default function ProductDetail() {
     }
 
     if (!form.institution.trim()) {
-      setFormError('Informe a instituição do produto.')
+      setFormError('Informe a instituicao do produto.')
       return
     }
 
@@ -195,15 +194,8 @@ export default function ProductDetail() {
         imageUrl: form.imageUrl,
       })
 
-      const refreshed = await getProductById(productId)
-      if (!refreshed) {
-        navigate('/produtos', { replace: true, state: { resetFilters: true } })
-        return
-      }
-
-      const mapped = mapProductToForm(refreshed)
-      setForm(mapped)
-      setInitialForm(mapped)
+      onSaved?.()
+      onClose()
     } catch (error) {
       setFormError(getPartnerApiErrorMessage(error))
     } finally {
@@ -217,39 +209,37 @@ export default function ProductDetail() {
 
     try {
       await removeProduct(productId)
-      navigate('/produtos', { replace: true, state: { resetFilters: true } })
+      onRemoved?.()
+      onClose()
     } catch (error) {
       setFormError(getPartnerApiErrorMessage(error))
+    } finally {
       setIsRemoving(false)
-      setShowRemoveModal(false)
     }
   }
 
-  const closeRemoveModal = () => {
-    if (isRemoving) return
-    setShowRemoveModal(false)
-  }
-
-  useModalDismiss(showRemoveModal, closeRemoveModal, isRemoving)
-
-  if (!loading && !loadError && !form) {
-    return <Navigate to="/produtos" replace />
-  }
-
   return (
-    <SidebarLayout>
-      <section className="product-create-page product-control-page">
-        <div className="student-create-header">
-          <h1 className="partners-heading">Controle produto</h1>
+    <div
+      className="partner-modal-backdrop product-edit-modal-backdrop"
+      role="presentation"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) closeModal()
+      }}
+    >
+      <div
+        className="partner-modal product-edit-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Editar produto"
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <button type="button" className="partner-modal-close" aria-label="Fechar" onClick={closeModal}>
+          <CloseIcon />
+        </button>
 
-          <button
-            type="button"
-            className="student-back-button product-create-back"
-            aria-label="Voltar para produtos"
-            onClick={() => navigate('/produtos')}
-          >
-            <BackIcon />
-          </button>
+        <div className="partner-modal-header">
+          <p className="partner-modal-label">Editar produto</p>
+          <h2 className="partner-modal-title">Atualize as informacoes</h2>
         </div>
 
         {loading ? <p className="form-message">Carregando produto...</p> : null}
@@ -257,8 +247,8 @@ export default function ProductDetail() {
         {formError ? <p className="form-message form-message-error">{formError}</p> : null}
 
         {!loading && !loadError && form ? (
-          <form className="product-create-form" onSubmit={handleSubmit}>
-            <section className="product-create-card">
+          <form className="product-create-form product-edit-modal-form" onSubmit={handleSubmit}>
+            <section className="product-create-card product-edit-modal-card">
               <div className="product-create-grid">
                 <div className="product-create-column">
                   <label className="product-create-field">
@@ -267,7 +257,7 @@ export default function ProductDetail() {
                   </label>
 
                   <label className="product-create-field">
-                    <span>Instituição:</span>
+                    <span>Instituicao:</span>
                     <input type="text" value={form.institution} onChange={handleFieldChange('institution')} />
                   </label>
 
@@ -282,7 +272,7 @@ export default function ProductDetail() {
 
                 <div className="product-create-column product-create-column-side">
                   <div className="product-photo-box">
-                    <span>Adicionar foto:</span>
+                    <span>Foto:</span>
                     <button type="button" className="product-photo-button" onClick={handleChooseImage}>
                       {form.imageUrl ? (
                         <img src={form.imageUrl} alt="Preview do produto" className="product-photo-preview" />
@@ -300,79 +290,37 @@ export default function ProductDetail() {
                   </div>
 
                   <label className="product-create-textarea-field">
-                    <span>Descrição (opcional):</span>
+                    <span>Descricao (opcional):</span>
                     <textarea value={form.description} onChange={handleFieldChange('description')} />
                   </label>
                 </div>
               </div>
             </section>
 
-            <div className="product-control-actions">
-              {hasChanges ? (
-                <button
-                  type="submit"
-                  className="product-create-submit-button product-control-confirm-button"
-                  disabled={isSaving || isRemoving}
-                >
-                  {isSaving ? 'Salvando...' : 'Confirmar alterações'}
-                </button>
-              ) : (
-                <span className="product-control-actions-spacer" aria-hidden="true"></span>
-              )}
-
+            <div className="partner-modal-actions partner-modal-actions-split product-edit-modal-actions">
               <button
                 type="button"
-                className="product-control-remove-button"
-                onClick={() => setShowRemoveModal(true)}
-                disabled={isRemoving || isSaving}
+                className="student-remove-button partner-product-modal-remove"
+                onClick={handleRemove}
+                disabled={isSaving || isRemoving}
               >
-                <span>Remover produto</span>
-                <span className="product-control-remove-icon">
+                <span>{isRemoving ? 'Removendo...' : 'Remover produto'}</span>
+                <span className="student-remove-icon">
                   <RemoveIcon />
                 </span>
+              </button>
+
+              <button
+                type="submit"
+                className="student-submit-button"
+                disabled={!hasChanges || isSaving || isRemoving}
+              >
+                {isSaving ? 'Salvando...' : 'Salvar produto'}
               </button>
             </div>
           </form>
         ) : null}
-
-        {showRemoveModal ? (
-          <div
-            className="product-remove-modal-backdrop"
-            role="presentation"
-            onMouseDown={(event) => {
-              if (event.target === event.currentTarget) closeRemoveModal()
-            }}
-          >
-            <div
-              className="product-remove-modal"
-              role="dialog"
-              aria-modal="true"
-              aria-label="Remover produto"
-              onMouseDown={(event) => event.stopPropagation()}
-            >
-              <button
-                type="button"
-                className="product-remove-modal-close"
-                aria-label="Fechar modal de remoção"
-                onClick={closeRemoveModal}
-              >
-                <CloseIcon />
-              </button>
-
-              <p>Tem certeza de que deseja remover este produto?</p>
-
-              <button
-                type="button"
-                className="product-remove-modal-confirm"
-                onClick={handleRemove}
-                disabled={isRemoving}
-              >
-                {isRemoving ? 'Removendo...' : 'Remover'}
-              </button>
-            </div>
-          </div>
-        ) : null}
-      </section>
-    </SidebarLayout>
+      </div>
+    </div>
   )
 }

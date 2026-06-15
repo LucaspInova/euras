@@ -8,7 +8,8 @@ import PartnerPortalProductCreate from "./features/partner-portal/pages/PartnerP
 import PartnerPortalProductDetail from "./features/partner-portal/pages/PartnerPortalProductDetail";
 import PartnerPortalProfile from "./features/partner-portal/pages/PartnerPortalProfile";
 import PartnerPortalRequests from "./features/partner-portal/pages/PartnerPortalRequests";
-import { ROLE_ADMIN, ROLE_PARTNER } from "./lib/authRoles";
+import StudentPortalHome from "./features/student-portal/pages/StudentPortalHome";
+import { ROLE_ADMIN, ROLE_PARTNER, ROLE_STUDENT } from "./lib/authRoles";
 import Activities from "./pages/Activities";
 import Dashboard from "./pages/Dashboard";
 import Login from "./pages/Login";
@@ -19,9 +20,6 @@ import PartnerProductDetail from "./pages/PartnerProductDetail";
 import PartnerProducts from "./pages/PartnerProducts";
 import Partners from "./pages/Partners";
 import Profile from "./pages/Profile";
-import ProductCreate from "./pages/ProductCreate";
-import ProductDetail from "./pages/ProductDetail";
-import Products from "./pages/Products";
 import StudentCreate from "./pages/StudentCreate";
 import StudentDetail from "./pages/StudentDetail";
 import StudentTransfer from "./pages/StudentTransfer";
@@ -37,6 +35,10 @@ function App() {
     <ProtectedRoute allowedRoles={[ROLE_PARTNER]}>{node}</ProtectedRoute>
   );
 
+  const studentGuard = (node) => (
+    <ProtectedRoute allowedRoles={[ROLE_STUDENT]}>{node}</ProtectedRoute>
+  );
+
   return (
     <AuthProvider>
       <Routes>
@@ -46,14 +48,20 @@ function App() {
         <Route path="/dashboard" element={adminGuard(<Dashboard />)} />
         <Route path="/alunos" element={adminGuard(<Students />)} />
         <Route path="/alunos/novo" element={adminGuard(<StudentCreate />)} />
-        <Route path="/alunos/:studentId" element={adminGuard(<StudentDetail />)} />
+        <Route
+          path="/alunos/:studentId"
+          element={adminGuard(<StudentDetail />)}
+        />
         <Route
           path="/alunos/:studentId/transferir"
           element={adminGuard(<StudentTransfer />)}
         />
         <Route path="/parceiros" element={adminGuard(<Partners />)} />
         <Route path="/parceiros/novo" element={adminGuard(<PartnerCreate />)} />
-        <Route path="/parceiros/:partnerId" element={adminGuard(<PartnerDetail />)} />
+        <Route
+          path="/parceiros/:partnerId"
+          element={adminGuard(<PartnerDetail />)}
+        />
         <Route
           path="/parceiros/:partnerId/produtos"
           element={adminGuard(<PartnerProducts />)}
@@ -66,14 +74,29 @@ function App() {
           path="/parceiros/:partnerId/produtos/:productId"
           element={adminGuard(<PartnerProductDetail />)}
         />
-        <Route path="/produtos" element={adminGuard(<Products />)} />
-        <Route path="/produtos/novo" element={adminGuard(<ProductCreate />)} />
-        <Route path="/produtos/:productId" element={adminGuard(<ProductDetail />)} />
+        <Route
+          path="/produtos"
+          element={<Navigate to="/parceiros" replace />}
+        />
+        <Route
+          path="/produtos/novo"
+          element={<Navigate to="/parceiros" replace />}
+        />
+        <Route
+          path="/produtos/:productId"
+          element={<Navigate to="/parceiros" replace />}
+        />
         <Route path="/atividades" element={adminGuard(<Activities />)} />
         <Route path="/perfil" element={adminGuard(<Profile />)} />
 
-        <Route path="/parceiro" element={<Navigate to="/portal-parceiro" replace />} />
-        <Route path="/portal-parceiro" element={partnerGuard(<PartnerPortalHome />)} />
+        <Route
+          path="/parceiro"
+          element={<Navigate to="/portal-parceiro" replace />}
+        />
+        <Route
+          path="/portal-parceiro"
+          element={partnerGuard(<PartnerPortalHome />)}
+        />
         <Route
           path="/portal-parceiro/atividades"
           element={partnerGuard(<PartnerPortalActivities />)}
@@ -101,6 +124,15 @@ function App() {
         <Route
           path="/portal-parceiro/solicitacoes"
           element={partnerGuard(<PartnerPortalRequests />)}
+        />
+
+        <Route
+          path="/aluno"
+          element={<Navigate to="/portal-aluno" replace />}
+        />
+        <Route
+          path="/portal-aluno"
+          element={studentGuard(<StudentPortalHome />)}
         />
 
         <Route path="*" element={<Navigate to="/login" replace />} />

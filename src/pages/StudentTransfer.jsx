@@ -131,17 +131,21 @@ export default function StudentTransfer() {
 
         {!loadingStudent && !loadError && student ? (
           <section className="student-create-card student-transfer-card">
-          <p className="student-transfer-text">Voce deseja transferir</p>
+          <p className="student-transfer-text">Você deseja transferir</p>
 
           <label className="student-transfer-amount">
-            <span>{'<'}</span>
-            <input
-              type="text"
-              value={amount}
-              onChange={(event) => setAmount(formatBalanceInput(event.target.value))}
-              aria-label="Valor a transferir"
-              placeholder="300,00"
-            />
+            <span className="student-transfer-coin euras-inline-coin" aria-hidden="true" />
+            <span className="student-transfer-input-wrap">
+              <span className="student-transfer-input-label">Valor em Euras</span>
+              <input
+                type="text"
+                inputMode="decimal"
+                value={amount}
+                onChange={(event) => setAmount(formatBalanceInput(event.target.value))}
+                aria-label="Valor a transferir"
+                placeholder="0,00"
+              />
+            </span>
           </label>
 
           <p className="student-transfer-text">para:</p>

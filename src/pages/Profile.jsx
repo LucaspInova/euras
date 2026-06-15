@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import SidebarLayout from '../components/SidebarLayout'
 import { useAuth } from '../context/AuthContext'
 
@@ -18,25 +17,8 @@ function EyeOffIcon() {
   )
 }
 
-function CloseIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path
-        d="M6 6l12 12M18 6 6 18"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-      />
-    </svg>
-  )
-}
-
 export default function Profile() {
-  const navigate = useNavigate()
-  const { user, profile, updateProfile, signOut } = useAuth()
-  const [showSignOutModal, setShowSignOutModal] = useState(false)
-  const [isSigningOut, setIsSigningOut] = useState(false)
+  const { user, profile, updateProfile } = useAuth()
   const [nameValue, setNameValue] = useState('')
   const [phoneValue, setPhoneValue] = useState('')
   const [saveError, setSaveError] = useState('')
@@ -57,43 +39,6 @@ export default function Profile() {
     setNameValue(defaultName)
     setPhoneValue(defaultPhone)
   }, [profile, user])
-
-  const openSignOutModal = () => {
-    setShowSignOutModal(true)
-  }
-
-  const closeSignOutModal = () => {
-    if (isSigningOut) {
-      return
-    }
-
-    setShowSignOutModal(false)
-  }
-
-  const handleSignOut = async () => {
-    if (isSigningOut) {
-      return
-    }
-
-    setIsSigningOut(true)
-    setShowSignOutModal(false)
-    navigate('/login', { replace: true })
-
-    try {
-      const { error } = await signOut()
-
-      if (error) {
-        console.error('Falha ao encerrar sessão no Supabase.', {
-          message: error.message,
-          status: error.status,
-          code: error.code,
-          name: error.name,
-        })
-      }
-    } catch (error) {
-      console.error('Erro inesperado ao encerrar sessão.', error)
-    }
-  }
 
   const handleSaveProfile = async () => {
     if (isSavingProfile) {
@@ -127,7 +72,7 @@ export default function Profile() {
   }
 
   return (
-    <SidebarLayout title="Meu perfil" showSidebarSignOut={false}>
+    <SidebarLayout title="Meu perfil">
       <section className="profile-page">
         <article className="profile-card">
           <div className="profile-card-coin" aria-hidden="true" />
@@ -164,44 +109,15 @@ export default function Profile() {
               type="button"
               className="profile-save-button"
               onClick={handleSaveProfile}
-              disabled={isSavingProfile || isSigningOut}
+              disabled={isSavingProfile}
             >
               {isSavingProfile ? 'Salvando...' : 'Salvar alterações'}
-            </button>
-            <button type="button" className="profile-disconnect-button" onClick={openSignOutModal} disabled={isSigningOut}>
-              Desconectar
             </button>
           </div>
 
           {saveSuccess ? <p className="form-message">{saveSuccess}</p> : null}
           {saveError ? <p className="form-message form-message-error">{saveError}</p> : null}
         </article>
-
-        {showSignOutModal ? (
-          <div className="profile-signout-backdrop" role="presentation">
-            <div className="profile-signout-modal" role="dialog" aria-modal="true" aria-label="Confirmar saída">
-              <button
-                type="button"
-                className="profile-signout-close"
-                aria-label="Fechar confirmação de saída"
-                onClick={closeSignOutModal}
-              >
-                <CloseIcon />
-              </button>
-
-              <p>Tem certeza de que deseja desconectar?</p>
-
-              <button
-                type="button"
-                className="profile-signout-confirm"
-                disabled={isSigningOut}
-                onClick={handleSignOut}
-              >
-                {isSigningOut ? 'Saindo...' : 'Sair'}
-              </button>
-            </div>
-          </div>
-        ) : null}
       </section>
     </SidebarLayout>
   )
