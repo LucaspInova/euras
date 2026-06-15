@@ -443,6 +443,24 @@ body {
   color: #171717;
 }
 
+.looker-report-shell {
+  width: 100%;
+  min-height: calc(100vh - 120px);
+  border: 1px solid var(--ui-border, rgba(15, 23, 42, 0.08));
+  border-radius: 8px;
+  background: #ffffff;
+  overflow: hidden;
+}
+
+.looker-report-frame {
+  display: block;
+  width: 100%;
+  height: calc(100vh - 120px);
+  min-height: 520px;
+  border: 0;
+  background: #ffffff;
+}
+
 .metrics-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
