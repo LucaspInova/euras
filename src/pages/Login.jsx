@@ -54,15 +54,12 @@ export default function Login() {
     profileLoading,
     authError,
     signInWithPassword,
-    signInWithGoogle,
-    resetPasswordForEmail,
   } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [formError, setFormError] = useState("");
-  const [formSuccess, setFormSuccess] = useState("");
 
   useEffect(() => {
     if (!loading && !profileLoading && user && isSupportedRole(role)) {
@@ -79,27 +76,9 @@ export default function Login() {
       ? authError
       : "";
 
-  const getRecoverPasswordErrorMessage = (error) => {
-    const rawMessage = error?.message?.toLowerCase() || "";
-
-    if (
-      error?.code === "over_email_send_rate_limit" ||
-      error?.status === 429 ||
-      rawMessage.includes("no new code") ||
-      rawMessage.includes("codigo novo") ||
-      rawMessage.includes("too many") ||
-      rawMessage.includes("rate limit")
-    ) {
-      return "Nao foi enviado codigo novo. Aguarde alguns minutos antes de tentar novamente.";
-    }
-
-    return error?.message || "Nao foi possivel enviar o codigo agora.";
-  };
-
   const handlePasswordLogin = async (event) => {
     event.preventDefault();
     setFormError("");
-    setFormSuccess("");
 
     if (!email || !password) {
       setFormError("Preencha e-mail e senha para continuar.");
@@ -146,45 +125,6 @@ export default function Login() {
       setFormError("Não foi possível fazer login agora.");
       return;
     }
-
-  };
-
-  const handleGoogleLogin = async () => {
-    setFormError("");
-    setFormSuccess("");
-    setIsLoading(true);
-
-    const { error } = await signInWithGoogle();
-
-    setIsLoading(false);
-
-    if (error) {
-      setFormError(error.message || "Não foi possível iniciar o login com Google.");
-    }
-  };
-
-  const handleForgotPassword = async () => {
-    setFormError("");
-    setFormSuccess("");
-
-    const normalizedEmail = email.trim();
-    if (!normalizedEmail) {
-      setFormError("Informe seu e-mail para receber o codigo de redefinicao.");
-      return;
-    }
-
-    setIsLoading(true);
-
-    const { error } = await resetPasswordForEmail(normalizedEmail);
-
-    setIsLoading(false);
-
-    if (error) {
-      setFormError(getRecoverPasswordErrorMessage(error));
-      return;
-    }
-
-    setFormSuccess(`Enviamos as instrucoes para ${normalizedEmail}.`);
   };
 
   return (
@@ -237,37 +177,8 @@ export default function Login() {
             </p>
           )}
 
-          {formSuccess && (
-            <p className="form-message">
-              {formSuccess}
-            </p>
-          )}
-
           <button className="primary-button" type="submit" disabled={isLoading}>
             {isLoading ? "Entrando..." : "Continuar"}
-          </button>
-
-          <span className="login-divider">ou</span>
-
-          <button
-            className="secondary-button"
-            type="button"
-            onClick={handleGoogleLogin}
-            disabled={isLoading}
-          >
-            <span aria-hidden="true" className="google-mark">
-              G
-            </span>
-            Continuar com o Google
-          </button>
-
-          <button
-            className="forgot-password-link"
-            type="button"
-            onClick={handleForgotPassword}
-            disabled={isLoading}
-          >
-            Esqueci minha senha.
           </button>
         </form>
       </section>

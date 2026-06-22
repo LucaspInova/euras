@@ -173,7 +173,7 @@ export async function uploadStudentAvatar(profileId, file) {
     .from('avatars')
     .upload(filePath, file, {
       cacheControl: '3600',
-      upsert: true,
+      upsert: false,
       contentType: file.type || 'image/jpeg',
     })
 
