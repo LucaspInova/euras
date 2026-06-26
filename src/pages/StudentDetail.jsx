@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
-import { Navigate, useNavigate, useParams } from 'react-router-dom'
+import { Navigate, useLocation, useNavigate, useParams } from 'react-router-dom'
 import SidebarLayout from '../components/SidebarLayout'
 import { useModalDismiss } from '../hooks/useModalDismiss'
+import { listarCursosPorSede, listarSedes } from '../lib/academicApi'
 import { formatDateInput, formatPhoneInput } from '../lib/studentFormatters'
 import { getStudentApiErrorMessage, getStudentById, removeStudent, updateStudent } from '../lib/studentsApi'
 
@@ -45,14 +46,24 @@ function RemoveIcon() {
 
 export default function StudentDetail() {
   const navigate = useNavigate()
+  const location = useLocation()
   const { studentId } = useParams()
+  const studentPreview = location.state?.studentPreview ?? null
   const [showDeleteModal, setShowDeleteModal] = useState(false)
-  const [student, setStudent] = useState(null)
-  const [form, setForm] = useState(null)
-  const [loadingStudent, setLoadingStudent] = useState(true)
+  const [student, setStudent] = useState(studentPreview)
+  const [form, setForm] = useState(studentPreview)
+  const [loadingStudent, setLoadingStudent] = useState(!studentPreview)
+  const [sedes, setSedes] = useState([])
+  const [cursos, setCursos] = useState([])
+  const [loadingSedes, setLoadingSedes] = useState(true)
+  const [loadingCursos, setLoadingCursos] = useState(false)
   const [loadError, setLoadError] = useState('')
   const [saveError, setSaveError] = useState('')
   const [isRemoving, setIsRemoving] = useState(false)
+  const formCampus = form?.campus ?? ''
+  const formCampusId = form?.campusId ?? ''
+  const formCourse = form?.course ?? ''
+  const formCourseId = form?.courseId ?? ''
 
   useEffect(() => {
     let active = true
@@ -91,6 +102,112 @@ export default function StudentDetail() {
     }
   }, [studentId])
 
+  useEffect(() => {
+    let active = true
+
+    async function loadSedes() {
+      setLoadingSedes(true)
+
+      try {
+        const nextSedes = await listarSedes({ somenteAtivas: false })
+
+        if (!active) {
+          return
+        }
+
+        setSedes(nextSedes)
+      } catch (error) {
+        if (!active) {
+          return
+        }
+
+        console.info('Nao foi possivel carregar sedes no detalhe do aluno.', error)
+        setSaveError('Nao foi possivel carregar as sedes cadastradas.')
+      } finally {
+        if (active) {
+          setLoadingSedes(false)
+        }
+      }
+    }
+
+    loadSedes()
+
+    return () => {
+      active = false
+    }
+  }, [])
+
+  useEffect(() => {
+    if ((!formCampus && !formCampusId) || sedes.length === 0) {
+      return
+    }
+
+    if (!formCampusId && formCampus) {
+      const matchingSede = sedes.find((sede) => sede.nome === formCampus)
+      if (matchingSede) {
+        setForm((current) => current ? { ...current, campusId: matchingSede.id } : current)
+      }
+      return
+    }
+
+    const selectedSede = sedes.find((sede) => sede.id === formCampusId)
+    if (selectedSede && selectedSede.nome !== formCampus) {
+      setForm((current) => current ? { ...current, campus: selectedSede.nome } : current)
+    }
+  }, [formCampus, formCampusId, sedes])
+
+  useEffect(() => {
+    if (formCourseId || !formCourse || cursos.length === 0) {
+      return
+    }
+
+    const matchingCurso = cursos.find((curso) => curso.nome === formCourse)
+    if (matchingCurso) {
+      setForm((current) => current ? { ...current, courseId: matchingCurso.id } : current)
+    }
+  }, [cursos, formCourse, formCourseId])
+
+  useEffect(() => {
+    let active = true
+
+    async function loadCursos() {
+      if (!form?.campusId) {
+        setCursos([])
+        return
+      }
+
+      setLoadingCursos(true)
+
+      try {
+        const nextCursos = await listarCursosPorSede(form.campusId, { somenteAtivos: false })
+
+        if (!active) {
+          return
+        }
+
+        setCursos(nextCursos)
+      } catch (error) {
+        if (!active) {
+          return
+        }
+
+        console.info('Nao foi possivel carregar cursos no detalhe do aluno.', error)
+        setCursos([])
+        setSaveError('Nao foi possivel carregar os cursos da sede selecionada.')
+      } finally {
+        if (active) {
+          setLoadingCursos(false)
+        }
+      }
+    }
+
+    loadCursos()
+
+    return () => {
+      active = false
+    }
+  }, [form?.campusId])
+
   const closeDeleteModal = () => {
     if (isRemoving) return
     setShowDeleteModal(false)
@@ -127,6 +244,48 @@ export default function StudentDetail() {
     }
   }
 
+  const handleSedeChange = (event) => {
+    const campusId = event.target.value
+    const selectedSede = sedes.find((sede) => sede.id === campusId)
+
+    setForm((current) => ({
+      ...current,
+      campusId,
+      campus: selectedSede?.nome ?? '',
+      courseId: '',
+      course: '',
+    }))
+    setCursos([])
+    setSaveError('')
+  }
+
+  const handleCursoChange = async (event) => {
+    const courseId = event.target.value
+    const selectedCourse = cursos.find((curso) => curso.id === courseId)
+    const nextForm = {
+      ...form,
+      courseId,
+      course: selectedCourse?.nome ?? '',
+    }
+
+    setForm(nextForm)
+    setSaveError('')
+
+    if (!nextForm.campusId || !nextForm.courseId) {
+      setSaveError('Selecione sede e curso para atualizar o aluno.')
+      return
+    }
+
+    try {
+      const updatedStudent = await updateStudent(student?.id ?? studentId, nextForm)
+      setStudent(updatedStudent)
+      setForm(updatedStudent)
+    } catch (error) {
+      console.info('Nao foi possivel atualizar sede/curso do aluno.', error)
+      setSaveError(getStudentApiErrorMessage(error))
+    }
+  }
+
   const handleRemoveStudent = async () => {
     setIsRemoving(true)
 
@@ -156,11 +315,11 @@ export default function StudentDetail() {
           </button>
         </div>
 
-        {loadingStudent ? <p className="form-message">Carregando aluno...</p> : null}
+        {loadingStudent && !form ? <p className="form-message">Carregando aluno...</p> : null}
         {loadError ? <p className="form-message form-message-error">{loadError}</p> : null}
         {saveError ? <p className="form-message form-message-error">{saveError}</p> : null}
 
-        {!loadingStudent && !loadError && form ? (
+        {!loadError && form ? (
           <>
         <section className="student-create-card student-detail-card">
           <div className="student-create-grid">
@@ -202,22 +361,35 @@ export default function StudentDetail() {
             <div className="student-create-column">
               <label className="student-field student-field-select">
                 <span>Sede:</span>
-                <select value={form.campus} onChange={handleChange('campus')}>
-                  <option value="MARACANAU">MARACANAU</option>
-                  <option value="REDENCAO">REDENCAO</option>
-                  <option value="PENTECOSTES">PENTECOSTES</option>
+                <select value={form.campusId ?? ''} onChange={handleSedeChange} disabled={loadingSedes}>
+                  <option value="">{loadingSedes ? 'Carregando sedes...' : 'Selecione a sede'}</option>
+                  {sedes.map((sede) => (
+                    <option key={sede.id} value={sede.id}>
+                      {sede.nome}
+                    </option>
+                  ))}
                 </select>
               </label>
 
               <label className="student-field student-field-select">
                 <span>Curso:</span>
-                <select value={form.course} onChange={handleChange('course')}>
-                  <option value="ENGENHARIA CIVIL">ENGENHARIA CIVIL</option>
-                  <option value="ENFERMAGEM">ENFERMAGEM</option>
-                  <option value="DIREITO">DIREITO</option>
-                  <option value="MEDICINA">MEDICINA</option>
-                  <option value="ARQUITETURA">ARQUITETURA</option>
-                  <option value="PSICOLOGIA">PSICOLOGIA</option>
+                <select
+                  value={form.courseId ?? ''}
+                  onChange={handleCursoChange}
+                  disabled={!form.campusId || loadingCursos}
+                >
+                  <option value="">
+                    {!form.campusId
+                      ? 'Selecione uma sede primeiro'
+                      : loadingCursos
+                        ? 'Carregando cursos...'
+                        : 'Selecione o curso'}
+                  </option>
+                  {cursos.map((course) => (
+                    <option key={course.id} value={course.id}>
+                      {course.nome}
+                    </option>
+                  ))}
                 </select>
               </label>
 

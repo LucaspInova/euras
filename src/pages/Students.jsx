@@ -275,7 +275,9 @@ export default function Students() {
                 className="students-row"
                 key={student.id}
                 onClick={() => {
-                  navigate(`/alunos/${student.id}`)
+                  navigate(`/alunos/${student.id}`, {
+                    state: { studentPreview: student },
+                  })
                 }}
               >
                 <span className="students-name">{student.name}</span>

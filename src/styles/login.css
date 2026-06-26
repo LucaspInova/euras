@@ -4726,6 +4726,193 @@ button:disabled {
   color: var(--ui-accent);
 }
 
+.academic-page {
+  display: grid;
+  gap: 18px;
+}
+
+.academic-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.academic-panel {
+  border: 1px solid var(--ui-border);
+  border-radius: 8px;
+  background: var(--ui-surface);
+  display: grid;
+  gap: 16px;
+  padding: 18px;
+}
+
+.academic-panel-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.academic-panel-header h2 {
+  margin: 0;
+  color: var(--ui-heading);
+  font-size: 1.08rem;
+  line-height: 1.2;
+  font-weight: 780;
+}
+
+.academic-create-row,
+.academic-edit-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.academic-create-row-courses {
+  grid-template-columns: minmax(150px, 0.8fr) minmax(0, 1fr) auto;
+}
+
+.academic-create-row .students-add-button {
+  min-height: 42px;
+  border-radius: 8px;
+  justify-content: center;
+}
+
+.academic-filter {
+  display: grid;
+  gap: 6px;
+  min-width: 190px;
+  color: var(--ui-muted);
+  font-size: 0.78rem;
+  font-weight: 750;
+  text-transform: uppercase;
+}
+
+.academic-filter select {
+  min-height: 38px;
+}
+
+.academic-list {
+  display: grid;
+  gap: 10px;
+}
+
+.academic-row {
+  border: 1px solid var(--ui-border);
+  border-radius: 8px;
+  background: var(--ui-surface-soft);
+  display: grid;
+  gap: 12px;
+  padding: 12px;
+}
+
+.academic-row-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+}
+
+.academic-row-main strong {
+  min-width: 0;
+  color: var(--ui-heading);
+  font-size: 0.96rem;
+  overflow-wrap: anywhere;
+}
+
+.academic-row-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.academic-ghost-button {
+  min-height: 34px;
+  border: 1px solid var(--ui-border);
+  border-radius: 8px;
+  background: var(--ui-surface);
+  color: var(--ui-text);
+  font-size: 0.84rem;
+  font-weight: 750;
+  padding: 0 14px;
+  cursor: pointer;
+  transition:
+    transform 0.18s ease,
+    background 0.18s ease,
+    border-color 0.18s ease;
+}
+
+.academic-ghost-button:hover,
+.academic-ghost-button:focus-visible {
+  border-color: var(--ui-border-strong);
+  background: #ffffff;
+  outline: none;
+  transform: translateY(-1px);
+}
+
+.academic-danger-button {
+  min-height: 34px;
+  border: 1px solid rgba(183, 52, 52, 0.25);
+  border-radius: 8px;
+  background: var(--ui-danger-soft);
+  color: var(--ui-danger);
+  font-size: 0.84rem;
+  font-weight: 750;
+  padding: 0 14px;
+  cursor: pointer;
+  transition:
+    transform 0.18s ease,
+    background 0.18s ease,
+    color 0.18s ease;
+}
+
+.academic-danger-button:hover,
+.academic-danger-button:focus-visible {
+  background: var(--ui-danger);
+  color: #ffffff;
+  outline: none;
+  transform: translateY(-1px);
+}
+
+.academic-status {
+  border: 1px solid rgba(183, 52, 52, 0.2);
+  border-radius: 999px;
+  background: var(--ui-danger-soft);
+  color: var(--ui-danger);
+  font-size: 0.72rem;
+  font-weight: 800;
+  line-height: 1;
+  padding: 6px 9px;
+  white-space: nowrap;
+}
+
+.academic-status-active {
+  border-color: rgba(47, 122, 69, 0.22);
+  background: var(--ui-success-soft);
+  color: var(--ui-success);
+}
+
+.academic-course-copy {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.academic-course-copy span {
+  color: var(--ui-muted);
+  font-size: 0.84rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.academic-edit-grid {
+  grid-template-columns: minmax(130px, 0.8fr) minmax(0, 1fr);
+}
+
 @media (max-width: 980px) {
   .home-shell {
     grid-template-columns: 210px minmax(0, 1fr);
@@ -4733,6 +4920,16 @@ button:disabled {
 
   .content-panel {
     padding: 24px 20px;
+  }
+
+  .academic-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .academic-create-row,
+  .academic-create-row-courses,
+  .academic-edit-grid {
+    grid-template-columns: 1fr;
   }
 }
 

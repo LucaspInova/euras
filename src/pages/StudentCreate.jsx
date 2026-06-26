@@ -1,11 +1,9 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import SidebarLayout from '../components/SidebarLayout'
+import { listarCursosPorSede, listarSedes } from '../lib/academicApi'
 import { formatDateInput, formatPhoneInput } from '../lib/studentFormatters'
 import { createStudent, getStudentApiErrorMessage } from '../lib/studentsApi'
-
-const campusOptions = ['MARACANAU', 'REDENCAO', 'PENTECOSTES']
-const courseOptions = ['ENGENHARIA CIVIL', 'ENFERMAGEM', 'DIREITO', 'MEDICINA', 'ARQUITETURA', 'PSICOLOGIA']
 
 function BackIcon() {
   return (
@@ -25,16 +23,101 @@ function BackIcon() {
 export default function StudentCreate() {
   const navigate = useNavigate()
   const [formError, setFormError] = useState('')
+  const [loadError, setLoadError] = useState('')
   const [isSaving, setIsSaving] = useState(false)
+  const [loadingSedes, setLoadingSedes] = useState(true)
+  const [loadingCursos, setLoadingCursos] = useState(false)
+  const [sedes, setSedes] = useState([])
+  const [cursos, setCursos] = useState([])
   const [form, setForm] = useState({
     name: '',
     phone: '',
     entryDate: '',
-    campus: 'MARACANAU',
-    course: 'ENGENHARIA CIVIL',
+    campusId: '',
+    campus: '',
+    courseId: '',
+    course: '',
     email: '',
     password: '',
   })
+
+  useEffect(() => {
+    let active = true
+
+    async function loadSedes() {
+      setLoadingSedes(true)
+      setLoadError('')
+
+      try {
+        const nextSedes = await listarSedes()
+
+        if (!active) {
+          return
+        }
+
+        setSedes(nextSedes)
+      } catch (error) {
+        if (!active) {
+          return
+        }
+
+        console.info('Nao foi possivel carregar sedes ativas.', error)
+        setLoadError('Nao foi possivel carregar as sedes ativas.')
+      } finally {
+        if (active) {
+          setLoadingSedes(false)
+        }
+      }
+    }
+
+    loadSedes()
+
+    return () => {
+      active = false
+    }
+  }, [])
+
+  useEffect(() => {
+    let active = true
+
+    async function loadCursos() {
+      if (!form.campusId) {
+        setCursos([])
+        return
+      }
+
+      setLoadingCursos(true)
+      setLoadError('')
+
+      try {
+        const nextCursos = await listarCursosPorSede(form.campusId)
+
+        if (!active) {
+          return
+        }
+
+        setCursos(nextCursos)
+      } catch (error) {
+        if (!active) {
+          return
+        }
+
+        console.info('Nao foi possivel carregar cursos ativos.', error)
+        setCursos([])
+        setLoadError('Nao foi possivel carregar os cursos ativos da sede.')
+      } finally {
+        if (active) {
+          setLoadingCursos(false)
+        }
+      }
+    }
+
+    loadCursos()
+
+    return () => {
+      active = false
+    }
+  }, [form.campusId])
 
   const handleChange = (field) => (event) => {
     let nextValue = event.target.value
@@ -50,12 +133,49 @@ export default function StudentCreate() {
     setForm((current) => ({ ...current, [field]: nextValue }))
   }
 
+  const handleSedeChange = (event) => {
+    const sedeId = event.target.value
+    const selectedSede = sedes.find((sede) => sede.id === sedeId)
+
+    setForm((current) => ({
+      ...current,
+      campusId: sedeId,
+      campus: selectedSede?.nome ?? '',
+      courseId: '',
+      course: '',
+    }))
+    setCursos([])
+    setFormError('')
+  }
+
+  const handleCursoChange = (event) => {
+    const courseId = event.target.value
+    const selectedCurso = cursos.find((curso) => curso.id === courseId)
+
+    setForm((current) => ({
+      ...current,
+      courseId,
+      course: selectedCurso?.nome ?? '',
+    }))
+    setFormError('')
+  }
+
   const handleSubmit = async (event) => {
     event.preventDefault()
     setFormError('')
 
     if (!form.name.trim() || !form.entryDate.trim()) {
       setFormError('Preencha obrigatoriamente Nome e Data de Entrada para adicionar o aluno.')
+      return
+    }
+
+    if (!form.campusId || !form.campus.trim()) {
+      setFormError('Selecione uma sede para adicionar o aluno.')
+      return
+    }
+
+    if (!form.courseId || !form.course.trim()) {
+      setFormError('Selecione um curso para adicionar o aluno.')
       return
     }
 
@@ -75,7 +195,9 @@ export default function StudentCreate() {
       await createStudent({
         name: form.name,
         course: form.course,
+        courseId: form.courseId,
         campus: form.campus,
+        campusId: form.campusId,
         phone: form.phone,
         entryDate: form.entryDate,
         email: form.email,
@@ -147,10 +269,11 @@ export default function StudentCreate() {
               <div className="student-create-column">
                 <label className="student-field student-field-select">
                   <span>Sede:</span>
-                  <select value={form.campus} onChange={handleChange('campus')}>
-                    {campusOptions.map((campus) => (
-                      <option key={campus} value={campus}>
-                        {campus}
+                  <select value={form.campusId} onChange={handleSedeChange} disabled={loadingSedes}>
+                    <option value="">{loadingSedes ? 'Carregando sedes...' : 'Selecione a sede'}</option>
+                    {sedes.map((sede) => (
+                      <option key={sede.id} value={sede.id}>
+                        {sede.nome}
                       </option>
                     ))}
                   </select>
@@ -158,10 +281,21 @@ export default function StudentCreate() {
 
                 <label className="student-field student-field-select">
                   <span>Curso:</span>
-                  <select value={form.course} onChange={handleChange('course')}>
-                    {courseOptions.map((course) => (
-                      <option key={course} value={course}>
-                        {course}
+                  <select
+                    value={form.courseId}
+                    onChange={handleCursoChange}
+                    disabled={!form.campusId || loadingCursos}
+                  >
+                    <option value="">
+                      {!form.campusId
+                        ? 'Selecione uma sede primeiro'
+                        : loadingCursos
+                          ? 'Carregando cursos...'
+                          : 'Selecione o curso'}
+                    </option>
+                    {cursos.map((course) => (
+                      <option key={course.id} value={course.id}>
+                        {course.nome}
                       </option>
                     ))}
                   </select>
@@ -195,9 +329,10 @@ export default function StudentCreate() {
           </section>
 
           {formError ? <p className="form-message form-message-error">{formError}</p> : null}
+          {loadError ? <p className="form-message form-message-error">{loadError}</p> : null}
 
           <div className="student-create-submit-row">
-            <button type="submit" className="student-submit-button">
+            <button type="submit" className="student-submit-button" disabled={isSaving || loadingSedes || loadingCursos}>
               {isSaving ? 'Salvando...' : 'Adicionar aluno'}
             </button>
           </div>

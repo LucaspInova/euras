@@ -7,6 +7,7 @@ const menuItems = [
   { to: "/alunos", label: "Alunos", icon: "alunos" },
   { to: "/parceiros", label: "Parceiros", icon: "parceiros" },
   { to: "/atividades", label: "Atividades", icon: "atividades" },
+  { to: "/sedes-cursos", label: "Sedes e cursos", icon: "sedesCursos" },
   { to: "/perfil", label: "Meu perfil", icon: "perfil" },
 ];
 
@@ -51,6 +52,15 @@ function MenuIcon({ type }) {
         <path d="M12 3 2.8 8 12 13 21.2 8 12 3Z" />
         <path d="m2.8 12 9.2 5 9.2-5-2.1-1.2-7.1 3.8-7.1-3.8L2.8 12Z" />
         <path d="m2.8 16 9.2 5 9.2-5-2.1-1.2-7.1 3.8-7.1-3.8L2.8 16Z" />
+      </svg>
+    );
+  }
+
+  if (type === "sedesCursos") {
+    return (
+      <svg viewBox="0 0 24 24" className="nav-icon-svg" aria-hidden="true">
+        <path d="M4 20V8.2L12 4l8 4.2V20h-5.2v-5.4H9.2V20H4Z" />
+        <path d="M9.1 10.2h5.8v2.2H9.1v-2.2Z" />
       </svg>
     );
   }

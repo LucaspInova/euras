@@ -16,6 +16,10 @@ function normalizeUpper(value) {
   return value?.trim().toUpperCase() ?? ''
 }
 
+function normalizeId(value) {
+  return String(value ?? '').trim()
+}
+
 function parseDateBr(value) {
   const match = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(value ?? '')
   if (!match) return null
@@ -74,6 +78,10 @@ function isMissingColumnError(error, columnName) {
     .toLowerCase()
 
   return joined.includes(String(columnName ?? '').toLowerCase()) && joined.includes('column')
+}
+
+function isMissingAcademicColumnError(error) {
+  return isMissingColumnError(error, 'sede_id') || isMissingColumnError(error, 'curso_id')
 }
 
 function isEmailAlreadyExistsError(error) {
@@ -284,8 +292,10 @@ function mapStudent(row) {
   return {
     id: row.id,
     name: row.nome_completo ?? '',
-    course: row.curso ?? '',
-    campus: row.campus ?? row.sede ?? '',
+    course: row.curso_nome ?? row.curso ?? '',
+    campus: row.sede_nome ?? row.campus ?? row.sede ?? '',
+    courseId: row.curso_id ?? null,
+    campusId: row.sede_id ?? null,
     phone: row.telefone ?? '',
     entryDate: isoToBrDate(row.data_entrada),
     email: row.email ?? '',
@@ -410,6 +420,8 @@ async function upsertLegacyStudentIfPresent(studentId, profileData) {
         email: profileData.email ?? '',
         campus: profileData.campus,
         curso: profileData.curso,
+        sede_id: profileData.sede_id ?? null,
+        curso_id: profileData.curso_id ?? null,
         data_entrada: profileData.data_entrada,
         ativo: profileData.ativo,
       },
@@ -536,7 +548,7 @@ export async function listStudents() {
 
   let query = euras
     .from('alunos_com_saldo')
-    .select('id, nome_completo, telefone, email, campus, curso, data_entrada, ativo, saldo_euras')
+    .select('id, nome_completo, telefone, email, campus, curso, data_entrada, ativo, saldo_euras, sede_id, sede_nome, curso_id, curso_nome')
     .eq('ativo', true)
     .not('curso', 'is', null)
     .not('campus', 'is', null)
@@ -545,6 +557,22 @@ export async function listStudents() {
     .order('nome_completo', { ascending: true })
 
   let { data, error } = await query
+
+  if (error && isMissingAcademicColumnError(error)) {
+    query = euras
+      .from('alunos_com_saldo')
+      .select('id, nome_completo, telefone, email, campus, curso, data_entrada, ativo, saldo_euras')
+      .eq('ativo', true)
+      .not('curso', 'is', null)
+      .not('campus', 'is', null)
+      .neq('curso', '')
+      .neq('campus', '')
+      .order('nome_completo', { ascending: true })
+
+    const fallbackResponse = await query
+    data = fallbackResponse.data
+    error = fallbackResponse.error
+  }
 
   if (error && isMissingColumnError(error, 'campus')) {
     query = euras
@@ -576,13 +604,26 @@ export async function listStudents() {
 export async function getStudentById(studentId) {
   await ensureFreshSession()
 
-  const { data, error } = await euras
+  let { data, error } = await euras
     .from('alunos_com_saldo')
-    .select('id, nome_completo, telefone, email, campus, curso, data_entrada, ativo, saldo_euras')
+    .select('id, nome_completo, telefone, email, campus, curso, data_entrada, ativo, saldo_euras, sede_id, sede_nome, curso_id, curso_nome')
     .eq('id', studentId)
     .eq('ativo', true)
     .limit(1)
     .maybeSingle()
+
+  if (error && isMissingAcademicColumnError(error)) {
+    const fallbackResponse = await euras
+      .from('alunos_com_saldo')
+      .select('id, nome_completo, telefone, email, campus, curso, data_entrada, ativo, saldo_euras')
+      .eq('id', studentId)
+      .eq('ativo', true)
+      .limit(1)
+      .maybeSingle()
+
+    data = fallbackResponse.data
+    error = fallbackResponse.error
+  }
 
   if (error) {
     if (isMissingRelationError(error)) {
@@ -601,12 +642,14 @@ export async function createStudent(student) {
   const name = normalizeUpper(student?.name)
   const campus = normalizeUpper(student?.campus)
   const course = normalizeUpper(student?.course)
+  const sedeId = normalizeId(student?.campusId ?? student?.sedeId ?? student?.sede_id)
+  const cursoId = normalizeId(student?.courseId ?? student?.cursoId ?? student?.curso_id)
   const email = student?.email?.trim().toLowerCase() ?? ''
   const password = student?.password?.trim() ?? ''
   const entryDate = parseDateBr(student?.entryDate?.trim() ?? '')
 
-  if (!name || !campus || !course || !email || !password || !entryDate) {
-    throw new Error('Preencha nome, campus, curso, e-mail, senha e uma data valida no formato dd/mm/aaaa.')
+  if (!name || !campus || !course || !sedeId || !cursoId || !email || !password || !entryDate) {
+    throw new Error('Preencha nome, sede, curso, e-mail, senha e uma data valida no formato dd/mm/aaaa.')
   }
 
   if (password.length < 6) {
@@ -618,6 +661,8 @@ export async function createStudent(student) {
     telefone: student?.phone?.trim() ?? '',
     email,
     senha: password,
+    sede_id: sedeId,
+    curso_id: cursoId,
     campus,
     curso: course,
     data_entrada: entryDate,
@@ -626,12 +671,18 @@ export async function createStudent(student) {
   await createStudentFromSecureServer(payload, session)
 }
 
+export async function criarAluno(student) {
+  return createStudent(student)
+}
+
 export async function updateStudent(studentId, updates) {
   await ensureFreshSession()
 
   const nextName = normalizeUpper(updates?.name)
   const nextCourse = normalizeUpper(updates?.course)
   const nextCampus = normalizeUpper(updates?.campus)
+  const nextCourseId = normalizeId(updates?.courseId ?? updates?.cursoId ?? updates?.curso_id)
+  const nextCampusId = normalizeId(updates?.campusId ?? updates?.sedeId ?? updates?.sede_id)
 
   let parsedDate = null
   if (typeof updates?.entryDate === 'string' && updates.entryDate.trim()) {
@@ -645,6 +696,8 @@ export async function updateStudent(studentId, updates) {
     nome_completo: nextName || undefined,
     curso: nextCourse || undefined,
     campus: nextCampus || undefined,
+    curso_id: nextCourseId || undefined,
+    sede_id: nextCampusId || undefined,
     telefone: updates?.phone?.trim() ?? '',
     email: updates?.email?.trim() ?? '',
     data_entrada: parsedDate ?? undefined,
@@ -656,7 +709,7 @@ export async function updateStudent(studentId, updates) {
     .eq('id', studentId)
     .eq('papel', 'aluno')
     .eq('ativo', true)
-    .select('id, nome_completo, telefone, email, campus, curso, data_entrada, ativo')
+    .select('id, nome_completo, telefone, email, campus, curso, sede_id, curso_id, data_entrada, ativo')
     .maybeSingle()
 
   if (error) {

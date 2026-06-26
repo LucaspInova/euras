@@ -51,6 +51,14 @@ function normalizeEmail(value: unknown) {
   return normalizeText(value).toLowerCase();
 }
 
+function normalizeUuid(value: unknown) {
+  const normalized = normalizeText(value);
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+    .test(normalized)
+    ? normalized
+    : "";
+}
+
 function isMissingRelationError(error: unknown) {
   const code = String((error as { code?: string })?.code ?? "");
   const message = String((error as { message?: string })?.message ?? "")
@@ -202,30 +210,53 @@ async function upsertProfileWithCompatibility(
   eurasAdmin: any,
   payload: Record<string, unknown>,
 ) {
-  const withAuthUserId = {
-    ...payload,
-    auth_user_id: payload.id,
-  };
+  const attempts = [
+    {
+      ...payload,
+      auth_user_id: payload.id,
+    },
+    payload,
+    {
+      ...payload,
+      auth_user_id: payload.id,
+      sede_id: undefined,
+      curso_id: undefined,
+    },
+    {
+      ...payload,
+      sede_id: undefined,
+      curso_id: undefined,
+    },
+  ];
 
-  let response = await eurasAdmin
-    .from("perfis")
-    .upsert(withAuthUserId, { onConflict: "id" })
-    .select("id")
-    .single();
+  let lastResponse: any = null;
 
-  if (!response.error) return response;
+  for (const attempt of attempts) {
+    const cleanPayload = Object.fromEntries(
+      Object.entries(attempt).filter(([, value]) => value !== undefined),
+    );
 
-  if (!isMissingColumnError(response.error, "auth_user_id")) {
-    return response;
+    const response = await eurasAdmin
+      .from("perfis")
+      .upsert(cleanPayload, { onConflict: "id" })
+      .select("id")
+      .single();
+
+    if (!response.error) return response;
+
+    lastResponse = response;
+
+    const canRetry =
+      isMissingColumnError(response.error, "auth_user_id") ||
+      isMissingColumnError(response.error, "sede_id") ||
+      isMissingColumnError(response.error, "curso_id");
+
+    if (!canRetry) {
+      return response;
+    }
   }
 
-  response = await eurasAdmin
-    .from("perfis")
-    .upsert(payload, { onConflict: "id" })
-    .select("id")
-    .single();
-
-  return response;
+  return lastResponse;
 }
 
 async function updateProfileEmailConflictIfNeeded(
@@ -256,6 +287,56 @@ async function updateProfileEmailConflictIfNeeded(
   }
 }
 
+async function getActiveSedeCurso(
+  eurasAdmin: any,
+  sedeId: string,
+  cursoId: string,
+) {
+  const { data: sede, error: sedeError } = await eurasAdmin
+    .from("sedes")
+    .select("id, nome, ativo")
+    .eq("id", sedeId)
+    .eq("ativo", true)
+    .limit(1)
+    .maybeSingle();
+
+  if (sedeError) throw sedeError;
+
+  if (!sede?.id) {
+    throw new ApiError(
+      400,
+      "validation_error",
+      "Selecione uma sede ativa.",
+    );
+  }
+
+  const { data: curso, error: cursoError } = await eurasAdmin
+    .from("cursos")
+    .select("id, nome, sede_id, ativo")
+    .eq("id", cursoId)
+    .eq("sede_id", sedeId)
+    .eq("ativo", true)
+    .limit(1)
+    .maybeSingle();
+
+  if (cursoError) throw cursoError;
+
+  if (!curso?.id) {
+    throw new ApiError(
+      400,
+      "validation_error",
+      "Selecione um curso ativo da sede escolhida.",
+    );
+  }
+
+  return {
+    sede,
+    curso,
+    campusNome: normalizeUpper(sede.nome),
+    cursoNome: normalizeUpper(curso.nome),
+  };
+}
+
 async function upsertLegacyStudentIfPresent(
   eurasAdmin: any,
   studentId: string,
@@ -268,29 +349,58 @@ async function upsertLegacyStudentIfPresent(
     email: payload.email ?? "",
     campus: payload.campus,
     curso: payload.curso,
+    sede_id: payload.sede_id,
+    curso_id: payload.curso_id,
     data_entrada: payload.data_entrada,
     ativo: true,
   };
 
-  let response = await eurasAdmin
-    .from("alunos")
-    .upsert(legacyPayload, { onConflict: "id" });
+  const sedePayload = {
+    ...legacyPayload,
+    sede: legacyPayload.campus,
+  } as Record<string, unknown>;
+  delete sedePayload.campus;
 
-  if (response.error && isMissingColumnError(response.error, "campus")) {
-    const fallbackPayload = {
-      ...legacyPayload,
-      sede: legacyPayload.campus,
-    } as Record<string, unknown>;
+  const withoutAcademicIds = { ...legacyPayload } as Record<string, unknown>;
+  delete withoutAcademicIds.sede_id;
+  delete withoutAcademicIds.curso_id;
 
-    delete fallbackPayload.campus;
+  const sedeWithoutAcademicIds = { ...sedePayload } as Record<string, unknown>;
+  delete sedeWithoutAcademicIds.sede_id;
+  delete sedeWithoutAcademicIds.curso_id;
 
-    response = await eurasAdmin
+  const attempts = [
+    legacyPayload,
+    sedePayload,
+    withoutAcademicIds,
+    sedeWithoutAcademicIds,
+  ];
+
+  let lastError: unknown = null;
+
+  for (const attempt of attempts) {
+    const response = await eurasAdmin
       .from("alunos")
-      .upsert(fallbackPayload, { onConflict: "id" });
+      .upsert(attempt, { onConflict: "id" });
+
+    if (!response.error) {
+      return;
+    }
+
+    lastError = response.error;
+
+    const canRetry =
+      isMissingColumnError(response.error, "campus") ||
+      isMissingColumnError(response.error, "sede_id") ||
+      isMissingColumnError(response.error, "curso_id");
+
+    if (!canRetry) {
+      break;
+    }
   }
 
-  if (response.error && !isMissingRelationError(response.error)) {
-    throw response.error;
+  if (lastError && !isMissingRelationError(lastError)) {
+    throw lastError;
   }
 }
 
@@ -440,8 +550,10 @@ Deno.serve(async (req: Request) => {
     const telefone = normalizeText(payload.telefone);
     const email = normalizeEmail(payload.email);
     const senha = normalizeText(payload.senha);
-    const campus = normalizeUpper(payload.campus);
-    const curso = normalizeUpper(payload.curso);
+    const sedeId = normalizeUuid(payload.sede_id);
+    const cursoId = normalizeUuid(payload.curso_id);
+    let campus = normalizeUpper(payload.campus);
+    let curso = normalizeUpper(payload.curso);
     const dataEntrada = normalizeText(payload.data_entrada);
 
     if (!nomeCompleto) {
@@ -460,13 +572,22 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    if (!campus || !curso || !dataEntrada) {
+    if (!sedeId || !cursoId || !dataEntrada) {
       throw new ApiError(
         400,
         "validation_error",
-        "Informe campus, curso e data de entrada.",
+        "Informe sede, curso e data de entrada.",
       );
     }
+
+    const academicSelection = await getActiveSedeCurso(
+      eurasAdmin,
+      sedeId,
+      cursoId,
+    );
+
+    campus = academicSelection.campusNome;
+    curso = academicSelection.cursoNome;
 
     const createAuthPayload = {
       email,
@@ -484,21 +605,21 @@ Deno.serve(async (req: Request) => {
       },
     };
 
-    const updateAuthPayload ={
+    const updateAuthPayload = {
       email,
       password: senha,
       email_confirm: true,
-       app_metadata: {
+      app_metadata: {
         role: "aluno",
         papel: "aluno",
-       },
-       user_metadata: {
+      },
+      user_metadata: {
         name: nomeCompleto,
         full_name: nomeCompleto,
         role: "aluno",
         papel: "aluno",
-       }
-    }
+      },
+    };
 
     const existingAuthUser = await findAuthUserByEmail(adminClient, email);
 
@@ -513,7 +634,7 @@ Deno.serve(async (req: Request) => {
       if (error) throw error;
     } else {
       const { data, error } = await adminClient.auth.admin.createUser(
-        createAuthPayload,  
+        createAuthPayload,
       );
 
       if (error) throw error;
@@ -544,6 +665,8 @@ Deno.serve(async (req: Request) => {
       papel: "aluno",
       telefone,
       email,
+      sede_id: sedeId,
+      curso_id: cursoId,
       campus,
       curso,
       data_entrada: dataEntrada,

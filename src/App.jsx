@@ -11,6 +11,7 @@ import PartnerPortalRequests from "./features/partner-portal/pages/PartnerPortal
 import StudentPortalHome from "./features/student-portal/pages/StudentPortalHome";
 import { ROLE_ADMIN, ROLE_PARTNER, ROLE_STUDENT } from "./lib/authRoles";
 import Activities from "./pages/Activities";
+import AcademicManagement from "./pages/AcademicManagement";
 import Dashboard from "./pages/Dashboard";
 import Login from "./pages/Login";
 import PartnerCreate from "./pages/PartnerCreate";
@@ -87,6 +88,10 @@ function App() {
           element={<Navigate to="/parceiros" replace />}
         />
         <Route path="/atividades" element={adminGuard(<Activities />)} />
+        <Route
+          path="/sedes-cursos"
+          element={adminGuard(<AcademicManagement />)}
+        />
         <Route path="/perfil" element={adminGuard(<Profile />)} />
 
         <Route
