@@ -113,13 +113,18 @@ export async function desativarSede(sedeId) {
 export async function apagarSede(sedeId) {
   await ensureFreshSession()
 
-  const { error } = await euras
+  const { data, error } = await euras
     .from('sedes')
     .delete()
     .eq('id', sedeId)
+    .select('id')
 
   if (error) {
     throw error
+  }
+
+  if (!Array.isArray(data) || data.length === 0) {
+    throw new Error('Sede nao encontrada ou sem permissao para apagar.')
   }
 }
 
@@ -226,12 +231,17 @@ export async function desativarCurso(cursoId) {
 export async function apagarCurso(cursoId) {
   await ensureFreshSession()
 
-  const { error } = await euras
+  const { data, error } = await euras
     .from('cursos')
     .delete()
     .eq('id', cursoId)
+    .select('id')
 
   if (error) {
     throw error
+  }
+
+  if (!Array.isArray(data) || data.length === 0) {
+    throw new Error('Curso nao encontrado ou sem permissao para apagar.')
   }
 }
